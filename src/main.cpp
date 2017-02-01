@@ -6,7 +6,14 @@
 const char *ssid     = "Goodsprings";
 const char *password = "387iswhereweare";
 
+const char* host = "data.sparkfun.com";
+const char* host2 = "api.sunrise-sunset.org";
+
+const char* streamId   = "....................";
+const char* privateKey = "....................";
+
 WiFiUDP ntpUDP;
+WiFiClient client;
 
 // You can specify the time server pool and the offset (in seconds, can be
 // changed later with setTimeOffset() ). Additionaly you can specify the
@@ -63,15 +70,56 @@ void checkNTPServer() {
     timeClient.update();
 
   Serial.println(timeClient.getFormattedTime());
+}
 
+void getRequest(void) {
+    int value = 0;
+
+    const int httpPort = 80;
+    if (!client.connect(host2, httpPort)) {
+      Serial.println("connection failed");
+      return;
+    }
+    // We now create a URI for the request
+    String url2 = "/json?lat=36.7201600&lng=-4.4203400&date=today";
+    String url = "/input/";
+    url += streamId;
+    url += "?private_key=";
+    url += privateKey;
+    url += "&value=";
+    url += value;
+
+    Serial.print("Requesting URL: ");
+    Serial.println(url2);
+
+    // This will send the request to the server
+    client.print(String("GET ") + url2 + " HTTP/1.1\r\n" +
+                 "Host: " + host2 + "\r\n" +
+                 "Connection: close\r\n\r\n");
+    unsigned long timeout = millis();
+    while (client.available() == 0) {
+      if (millis() - timeout > 5000) {
+        Serial.println(">>> Client Timeout !");
+        client.stop();
+        return;
+      }
+    }
+    // Read all the lines of the reply from server and print them to Serial
+    while(client.available()){
+      String line = client.readStringUntil('\r');
+      Serial.print(line);
+    }
+
+    Serial.println();
+Serial.println("closing connection");
 }
 
 void loop() {
   printScannedNetworks();
+  getRequest();
   for(;;) {
       checkNTPServer();
       // Wait a bit before scanning again
       delay(1000);
-
   }
 }
