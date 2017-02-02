@@ -13,6 +13,7 @@ const char* tod_host = "api.sunrise-sunset.org";
 const char* my_lat = "36.7201600";
 const char* my_long = "-4.4203400";
 
+
 WiFiUDP ntpUDP;
 WiFiClient client;
 
@@ -111,8 +112,8 @@ void getRequest(const String &my_lat, const String &my_long, String &dawn_time, 
     }
     // Read all the lines of the reply from server and print them to Serial
     while(client.available()){
-      line = client.readStringUntil('\r');
-      Serial.print(line);
+      line += client.readStringUntil('\r');
+      //Serial.print(line);
   }
     DynamicJsonBuffer jsonBuffer;
     // Root of the object tree.
@@ -120,9 +121,9 @@ void getRequest(const String &my_lat, const String &my_long, String &dawn_time, 
     // It's a reference to the JsonObject, the actual bytes are inside the
     // JsonBuffer with all the other nodes of the object tree.
     // Memory is freed when jsonBuffer goes out of scope.
-
+    Serial.print(line);
     String line2 = "{\"results\": {\"sunrise\": \"7:18:02 AM\",\"sunset\": \"5:44:52 PM\",\"solar_noon\": \"12:31:27 PM\",\"day_length\": \"10:26:50\",\"civil_twilight_begin\": \"6:51:00 AM\",\"civil_twilight_end\": \"6:11:54 PM\",\"nautical_twilight_begin\": \"6:20:09 AM\",\"nautical_twilight_end\": \"6:42:45 PM\",\"astronomical_twilight_begin\": \"5:49:46 AM\",\"astronomical_twilight_end\": \"7:13:08 PM\"},\"status\": \"OK\"}";
-    JsonObject& root = jsonBuffer.parseObject(line2); //TODO get this to work on actual line
+    JsonObject &root = jsonBuffer.parseObject(line); //TODO remove the header!
 
   // Test if parsing succeeds.
   if (!root.success()) {
