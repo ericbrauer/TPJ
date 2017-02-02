@@ -1,16 +1,17 @@
 #include <NTPClient.h>
 #include "ESP8266WiFi.h"
-
-
 #include <WiFiUdp.h>
+#include <ArduinoJson.h>
+
 const char *ssid     = "Goodsprings";
 const char *password = "387iswhereweare";
 
-const char* host = "data.sparkfun.com";
-const char* host2 = "api.sunrise-sunset.org";
+const int timezone_offset = -18000;
 
-const char* streamId   = "....................";
-const char* privateKey = "....................";
+const char* tod_host = "api.sunrise-sunset.org";
+
+const char* my_lat = "36.7201600";
+const char* my_long = "-4.4203400";
 
 WiFiUDP ntpUDP;
 WiFiClient client;
@@ -18,7 +19,7 @@ WiFiClient client;
 // You can specify the time server pool and the offset (in seconds, can be
 // changed later with setTimeOffset() ). Additionaly you can specify the
 // update interval (in milliseconds, can be changed using setUpdateInterval() ).
-NTPClient timeClient(ntpUDP, "ca.pool.ntp.org", -18000, 60000);
+NTPClient timeClient(ntpUDP, "ca.pool.ntp.org", timezone_offset, 60000);
 
 
 void setup() {
@@ -34,10 +35,14 @@ void setup() {
     delay ( 500 );
     Serial.print ( "." );
   }
-  //printScannedNetworks();
-  //Serial.println("Connecting to %c... ", ssid)
 
   timeClient.begin();
+
+  // Memory pool for JSON object tree.
+  //
+  // Inside the brackets, 200 is the size of the pool in bytes,
+  // If the JSON object is more complex, you need to increase that value.
+  StaticJsonBuffer<200> jsonBuffer;
 }
 
 void printScannedNetworks() {
@@ -72,7 +77,7 @@ void checkNTPServer() {
   Serial.println(timeClient.getFormattedTime());
 }
 
-void getRequest(void) {
+void getRequest(const String &my_lat, const String &my_long, String &dawn_time, String &dusk_time) {
     int value = 0;
 
     const int httpPort = 80;
@@ -81,20 +86,18 @@ void getRequest(void) {
       return;
     }
     // We now create a URI for the request
-    String url2 = "/json?lat=36.7201600&lng=-4.4203400&date=today";
-    String url = "/input/";
-    url += streamId;
-    url += "?private_key=";
-    url += privateKey;
-    url += "&value=";
-    url += value;
+    String url = "/json?lat="
+    url += my_lat;
+    url += "&lng=";
+    url += my_long;
+    url += "&date=today";
 
     Serial.print("Requesting URL: ");
-    Serial.println(url2);
+    Serial.println(url);
 
     // This will send the request to the server
-    client.print(String("GET ") + url2 + " HTTP/1.1\r\n" +
-                 "Host: " + host2 + "\r\n" +
+    client.print(String("GET ") + url + " HTTP/1.1\r\n" +
+                 "Host: " + tod_host + "\r\n" +
                  "Connection: close\r\n\r\n");
     unsigned long timeout = millis();
     while (client.available() == 0) {
@@ -110,13 +113,32 @@ void getRequest(void) {
       Serial.print(line);
     }
 
+    // Root of the object tree.
+    //
+    // It's a reference to the JsonObject, the actual bytes are inside the
+    // JsonBuffer with all the other nodes of the object tree.
+    // Memory is freed when jsonBuffer goes out of scope.
+    JsonObject& root = jsonBuffer.parseObject(line);
+
+  // Test if parsing succeeds.
+  if (!root.success()) {
+    Serial.println("parseObject() failed");
+    return;
+  }
+
+    dawn_time = root["results"]["sunrise"];
+    dusk_time = root["results"]["sunset"]
+
     Serial.println();
 Serial.println("closing connection");
 }
 
 void loop() {
   printScannedNetworks();
-  getRequest();
+  String dawn_time;
+  String dusk_time;
+
+  getRequest(my_lat, my_long, dawn_time, dusk_time);
   for(;;) {
       checkNTPServer();
       // Wait a bit before scanning again
