@@ -3,6 +3,19 @@
 #include <WiFiUdp.h>
 #include <ArduinoJson.h>
 
+#include <Adafruit_NeoPixel.h>
+#define PIN 14 //D5? gpio 14
+
+// Parameter 1 = number of pixels in strip
+// Parameter 2 = Arduino pin number (most are valid)
+// Parameter 3 = pixel type flags, add together as needed:
+//   NEO_KHZ800  800 KHz bitstream (most NeoPixel products w/WS2812 LEDs)
+//   NEO_KHZ400  400 KHz (classic 'v1' (not v2) FLORA pixels, WS2811 drivers)
+//   NEO_GRB     Pixels are wired for GRB bitstream (most NeoPixel products)
+//   NEO_RGB     Pixels are wired for RGB bitstream (v1 FLORA pixels, not v2)
+//   NEO_RGBW    Pixels are wired for RGBW bitstream (NeoPixel RGBW products)
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(8, PIN, NEO_GRB + NEO_KHZ800);
+
 const char *ssid     = "Goodsprings";
 const char *password = "387iswhereweare";
 
@@ -13,6 +26,8 @@ const char* tod_host = "api.sunrise-sunset.org";
 const char* my_lat = "36.7201600";
 const char* my_long = "-4.4203400";
 
+void theaterChase(uint32_t c, uint8_t wait);
+void colorWipe(uint32_t c, uint8_t wait);
 
 WiFiUDP ntpUDP;
 WiFiClient client;
@@ -38,6 +53,9 @@ void setup() {
   }
 
   timeClient.begin();
+
+  strip.begin();
+  strip.show(); // Initialize all pixels to 'off'
 
 
 }
@@ -145,10 +163,54 @@ void loop() {
   String dawn_time;
   String dusk_time;
 
-  getRequest(my_lat, my_long, dawn_time, dusk_time);
-  for(;;) {
-      checkNTPServer();
+  // Some example procedures showing how to display to the pixels:
+  colorWipe(strip.Color(0, 0, 2), 5); // Red
+  delay(2000);
+  colorWipe(strip.Color(5, 0, 15), 5);
+  delay(2000);
+  colorWipe(strip.Color(127, 127, 192), 5);
+  delay(2000);
+  colorWipe(strip.Color(1, 1, 1), 5);
+  delay(2000);
+  //colorWipe(strip.Color(0, 255, 0), 50); // Green
+  //colorWipe(strip.Color(0, 0, 255), 50); // Blue
+//colorWipe(strip.Color(0, 0, 0, 255), 50); // White RGBW
+  // Send a theater pixel chase in...
+  //theaterChase(strip.Color(127, 127, 127), 50); // White
+
+  //getRequest(my_lat, my_long, dawn_time, dusk_time);
+  //for(;;) {
+      //checkNTPServer();
       // Wait a bit before scanning again
-      delay(1000);
+      //delay(1000);
+
+
+  //}
+}
+
+//Theatre-style crawling lights.
+void theaterChase(uint32_t c, uint8_t wait) {
+  for (int j=0; j<10; j++) {  //do 10 cycles of chasing
+    for (int q=0; q < 3; q++) {
+      for (uint16_t i=0; i < strip.numPixels(); i=i+3) {
+        strip.setPixelColor(i+q, c);    //turn every third pixel on
+      }
+      strip.show();
+
+      delay(wait);
+
+      for (uint16_t i=0; i < strip.numPixels(); i=i+3) {
+        strip.setPixelColor(i+q, 0);        //turn every third pixel off
+      }
+    }
+  }
+}
+
+// Fill the dots one after the other with a color
+void colorWipe(uint32_t c, uint8_t wait) {
+  for(uint16_t i=0; i<strip.numPixels(); i++) {
+    strip.setPixelColor(i, c);
+    strip.show();
+    delay(wait);
   }
 }
