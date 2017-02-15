@@ -4,7 +4,7 @@
 #include <ArduinoJson.h>
 
 #include <Adafruit_NeoPixel.h>
-#define PIN 14 //D5? gpio 14
+#define PIN 14
 
 // Parameter 1 = number of pixels in strip
 // Parameter 2 = Arduino pin number (most are valid)
@@ -90,6 +90,7 @@ void checkNTPServer() {
     timeClient.update();
 
   Serial.println(timeClient.getFormattedTime());
+  Serial.println(timeClient.getEpochTime());
 }
 
 void getRequest(const String &my_lat, const String &my_long, String &dawn_time, String &dusk_time) {
@@ -131,29 +132,30 @@ void getRequest(const String &my_lat, const String &my_long, String &dawn_time, 
     // Read all the lines of the reply from server and print them to Serial
     while(client.available()){
       line += client.readStringUntil('\r');
-      //Serial.print(line);
-  }
-    DynamicJsonBuffer jsonBuffer;
-    // Root of the object tree.
-    //
+      if (line.endsWith("161"))
+      {
+          line="";
+      }
+      if (line.endsWith("OK\"}"))
+        break;
+    }
     // It's a reference to the JsonObject, the actual bytes are inside the
     // JsonBuffer with all the other nodes of the object tree.
     // Memory is freed when jsonBuffer goes out of scope.
     Serial.print(line);
-    String line2 = "{\"results\": {\"sunrise\": \"7:18:02 AM\",\"sunset\": \"5:44:52 PM\",\"solar_noon\": \"12:31:27 PM\",\"day_length\": \"10:26:50\",\"civil_twilight_begin\": \"6:51:00 AM\",\"civil_twilight_end\": \"6:11:54 PM\",\"nautical_twilight_begin\": \"6:20:09 AM\",\"nautical_twilight_end\": \"6:42:45 PM\",\"astronomical_twilight_begin\": \"5:49:46 AM\",\"astronomical_twilight_end\": \"7:13:08 PM\"},\"status\": \"OK\"}";
-    JsonObject &root = jsonBuffer.parseObject(line); //TODO remove the header!
+    DynamicJsonBuffer jsonBuffer;
+    JsonObject &root = jsonBuffer.parseObject(line);
+    if (!root.success()) {
+      Serial.println("parseObject() failed");
+      return;
+    }
 
-  // Test if parsing succeeds.
-  if (!root.success()) {
-    Serial.println("parseObject() failed");
-    return;
-  }
-
-    String first = root["results"]["sunrise"];
-    //dusk_time = root["results"]["sunset"];
-    Serial.println(first);
-
-
+      String ddawn_time = root["results"]["sunrise"];
+      String ddusk_time = root["results"]["sunset"];
+      Serial.println("dawn time: ");
+      Serial.println(ddawn_time);
+      Serial.println("dusk time: ");
+      Serial.println(ddusk_time);
 
     Serial.println("closing connection");
 }
@@ -178,14 +180,14 @@ void loop() {
   // Send a theater pixel chase in...
   //theaterChase(strip.Color(127, 127, 127), 50); // White
 
-  //getRequest(my_lat, my_long, dawn_time, dusk_time);
-  //for(;;) {
-      //checkNTPServer();
+  getRequest(my_lat, my_long, dawn_time, dusk_time);
+  for(;;) {
+      checkNTPServer();
       // Wait a bit before scanning again
-      //delay(1000);
+      delay(1000);
 
 
-  //}
+  }
 }
 
 //Theatre-style crawling lights.
