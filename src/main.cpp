@@ -1,16 +1,33 @@
 #include <NTPClient.h>
 #include "ESP8266WiFi.h"
-
-
 #include <WiFiUdp.h>
+#include <ArduinoJson.h>
+
+#include <Adafruit_NeoPixel.h>
+#define PIN 14
+
+// Parameter 1 = number of pixels in strip
+// Parameter 2 = Arduino pin number (most are valid)
+// Parameter 3 = pixel type flags, add together as needed:
+//   NEO_KHZ800  800 KHz bitstream (most NeoPixel products w/WS2812 LEDs)
+//   NEO_KHZ400  400 KHz (classic 'v1' (not v2) FLORA pixels, WS2811 drivers)
+//   NEO_GRB     Pixels are wired for GRB bitstream (most NeoPixel products)
+//   NEO_RGB     Pixels are wired for RGB bitstream (v1 FLORA pixels, not v2)
+//   NEO_RGBW    Pixels are wired for RGBW bitstream (NeoPixel RGBW products)
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(8, PIN, NEO_GRB + NEO_KHZ800);
+
 const char *ssid     = "Goodsprings";
 const char *password = "387iswhereweare";
 
-const char* host = "data.sparkfun.com";
-const char* host2 = "api.sunrise-sunset.org";
+const int timezone_offset = -18000;
 
-const char* streamId   = "....................";
-const char* privateKey = "....................";
+const char* tod_host = "api.sunrise-sunset.org";
+
+const char* my_lat = "36.7201600";
+const char* my_long = "-4.4203400";
+
+void theaterChase(uint32_t c, uint8_t wait);
+void colorWipe(uint32_t c, uint8_t wait);
 
 WiFiUDP ntpUDP;
 WiFiClient client;
@@ -18,7 +35,7 @@ WiFiClient client;
 // You can specify the time server pool and the offset (in seconds, can be
 // changed later with setTimeOffset() ). Additionaly you can specify the
 // update interval (in milliseconds, can be changed using setUpdateInterval() ).
-NTPClient timeClient(ntpUDP, "ca.pool.ntp.org", -18000, 60000);
+NTPClient timeClient(ntpUDP, "ca.pool.ntp.org", timezone_offset, 60000);
 
 
 void setup() {
@@ -34,10 +51,13 @@ void setup() {
     delay ( 500 );
     Serial.print ( "." );
   }
-  //printScannedNetworks();
-  //Serial.println("Connecting to %c... ", ssid)
 
   timeClient.begin();
+
+  strip.begin();
+  strip.show(); // Initialize all pixels to 'off'
+
+
 }
 
 void printScannedNetworks() {
@@ -70,31 +90,36 @@ void checkNTPServer() {
     timeClient.update();
 
   Serial.println(timeClient.getFormattedTime());
+  Serial.println(timeClient.getEpochTime());
 }
 
-void getRequest(void) {
-    int value = 0;
+void getRequest(const String &my_lat, const String &my_long, String &dawn_time, String &dusk_time) {
+    // Memory pool for JSON object tree.
+    //
+    // Inside the brackets, 200 is the size of the pool in bytes,
+    // If the JSON object is more complex, you need to increase that value.
+    //StaticJsonBuffer<2000> jsonBuffer;
+
+    String line;
 
     const int httpPort = 80;
-    if (!client.connect(host2, httpPort)) {
+    if (!client.connect(tod_host, httpPort)) {
       Serial.println("connection failed");
       return;
     }
     // We now create a URI for the request
-    String url2 = "/json?lat=36.7201600&lng=-4.4203400&date=today";
-    String url = "/input/";
-    url += streamId;
-    url += "?private_key=";
-    url += privateKey;
-    url += "&value=";
-    url += value;
+    String url = "/json?lat=";
+    url += my_lat;
+    url += "&lng=";
+    url += my_long;
+    url += "&date=today";
 
     Serial.print("Requesting URL: ");
-    Serial.println(url2);
+    Serial.println(url);
 
     // This will send the request to the server
-    client.print(String("GET ") + url2 + " HTTP/1.1\r\n" +
-                 "Host: " + host2 + "\r\n" +
+    client.print(String("GET ") + url + " HTTP/1.1\r\n" +
+                 "Host: " + tod_host + "\r\n" +
                  "Connection: close\r\n\r\n");
     unsigned long timeout = millis();
     while (client.available() == 0) {
@@ -106,20 +131,88 @@ void getRequest(void) {
     }
     // Read all the lines of the reply from server and print them to Serial
     while(client.available()){
-      String line = client.readStringUntil('\r');
-      Serial.print(line);
+      line += client.readStringUntil('\r');
+      if (line.endsWith("161"))
+      {
+          line="";
+      }
+      if (line.endsWith("OK\"}"))
+        break;
+    }
+    // It's a reference to the JsonObject, the actual bytes are inside the
+    // JsonBuffer with all the other nodes of the object tree.
+    // Memory is freed when jsonBuffer goes out of scope.
+    Serial.print(line);
+    DynamicJsonBuffer jsonBuffer;
+    JsonObject &root = jsonBuffer.parseObject(line);
+    if (!root.success()) {
+      Serial.println("parseObject() failed");
+      return;
     }
 
-    Serial.println();
-Serial.println("closing connection");
+      String ddawn_time = root["results"]["sunrise"];
+      String ddusk_time = root["results"]["sunset"];
+      Serial.println("dawn time: ");
+      Serial.println(ddawn_time);
+      Serial.println("dusk time: ");
+      Serial.println(ddusk_time);
+
+    Serial.println("closing connection");
 }
 
 void loop() {
   printScannedNetworks();
-  getRequest();
+  String dawn_time;
+  String dusk_time;
+
+  // Some example procedures showing how to display to the pixels:
+  colorWipe(strip.Color(0, 0, 2), 5); // Red
+  delay(2000);
+  colorWipe(strip.Color(5, 0, 15), 5);
+  delay(2000);
+  colorWipe(strip.Color(127, 127, 192), 5);
+  delay(2000);
+  colorWipe(strip.Color(1, 1, 1), 5);
+  delay(2000);
+  //colorWipe(strip.Color(0, 255, 0), 50); // Green
+  //colorWipe(strip.Color(0, 0, 255), 50); // Blue
+//colorWipe(strip.Color(0, 0, 0, 255), 50); // White RGBW
+  // Send a theater pixel chase in...
+  //theaterChase(strip.Color(127, 127, 127), 50); // White
+
+  getRequest(my_lat, my_long, dawn_time, dusk_time);
   for(;;) {
       checkNTPServer();
       // Wait a bit before scanning again
       delay(1000);
+
+
+  }
+}
+
+//Theatre-style crawling lights.
+void theaterChase(uint32_t c, uint8_t wait) {
+  for (int j=0; j<10; j++) {  //do 10 cycles of chasing
+    for (int q=0; q < 3; q++) {
+      for (uint16_t i=0; i < strip.numPixels(); i=i+3) {
+        strip.setPixelColor(i+q, c);    //turn every third pixel on
+      }
+      strip.show();
+
+      delay(wait);
+
+      for (uint16_t i=0; i < strip.numPixels(); i=i+3) {
+        strip.setPixelColor(i+q, 0);        //turn every third pixel off
+      }
+    }
+  }
+}
+
+// Fill the dots one after the other with a color
+void colorWipe(uint32_t c, uint8_t wait) {
+  for(uint16_t i=0; i<strip.numPixels(); i++) {
+    strip.setPixelColor(i, c);
+    strip.show();
+    delay(wait);
   }
 }
