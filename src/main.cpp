@@ -3,6 +3,7 @@
 #include <WiFiUdp.h>
 #include <ArduinoJson.h>
 #include <Adafruit_NeoPixel.h>
+#include <TimeLib.h>
 #define PIN 14
 
 // Parameter 1 = number of pixels in strip
@@ -20,6 +21,8 @@ const char* tod_host = "api.sunrise-sunset.org";
 
 const char* my_lat = "43.6532";
 const char* my_long = "-79.3832";
+
+time_t time_next_event;
 
 void theaterChase(uint32_t c, uint8_t wait);
 void colorWipe(uint32_t c, uint8_t wait);
@@ -84,7 +87,7 @@ void printScannedNetworks() {
 void checkNTPServer() {
     timeClient.update();
     Serial.println(timeClient.getFormattedTime());
-    Serial.println(timeClient.getEpochTime());
+    setTime(timeClient.getEpochTime());
 }
 
 void getTODRequest(const String &my_lat, const String &my_long, String &dawn_time, String &dusk_time) {
@@ -164,9 +167,11 @@ void loop() {
     delay(2000);
 
     getTODRequest(my_lat, my_long, dawn_time, dusk_time);
+    checkNTPServer();
+
     for(;;) {
-        checkNTPServer();
         // Wait a bit before scanning again
+        Serial.println(now())
         delay(1000);
     }
 }
