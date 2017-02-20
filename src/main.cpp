@@ -122,7 +122,7 @@ void getTODRequest(const String &my_lat, const String &my_long, String &dawn_tim
     // Read all the lines of the reply from server and print them to Serial
     while(client.available()) {
         line += client.readStringUntil('\r');
-        if (line.endsWith("161"))
+        if (line.endsWith("1e2"))
             line="";
         if (line.endsWith("OK\"}"))
             break;
