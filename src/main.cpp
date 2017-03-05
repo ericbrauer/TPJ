@@ -5,6 +5,7 @@
 #include <Adafruit_NeoPixel.h>
 #include <TimeLib.h>
 #define PIN 14
+#define POT 0
 
 // Parameter 1 = number of pixels in strip
 // Parameter 2 = Arduino pin number (most are valid)
@@ -19,8 +20,8 @@ const int timezone_offset = -18000;
 
 const char* tod_host = "api.sunrise-sunset.org";
 
-const char* my_lat = "43.6532";
-const char* my_long = "-79.3832";
+const char* my_lat = "43.7001";
+const char* my_long = "-79.4163";
 
 time_t time_next_event;
 
@@ -125,7 +126,7 @@ void getTODRequest(const String &my_lat, const String &my_long, String &dawn_tim
     // Read all the lines of the reply from server and print them to Serial
     while(client.available()) {
         line += client.readStringUntil('\r');
-        if (line.endsWith("161"))
+        if (line.endsWith("1e2"))
             line="";
         if (line.endsWith("OK\"}"))
             break;
@@ -141,7 +142,9 @@ void getTODRequest(const String &my_lat, const String &my_long, String &dawn_tim
       return;
     }
 
-    String ddawn_time = root["results"]["sunrise"];
+    const char* ddawn_time = root["results"]["sunrise"];
+    //char* x = strtok('T', ddawn_time);
+    //Serial.println(x);
     String ddusk_time = root["results"]["sunset"];
     Serial.println("dawn time: ");
     Serial.println(ddawn_time);
@@ -171,7 +174,8 @@ void loop() {
 
     for(;;) {
         // Wait a bit before scanning again
-        Serial.println(now())
+        Serial.println(now());
+        Serial.println(analogRead(POT));
         delay(1000);
     }
 }
