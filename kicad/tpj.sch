@@ -1,0 +1,247 @@
+EESchema Schematic File Version 2
+LIBS:power
+LIBS:device
+LIBS:transistors
+LIBS:conn
+LIBS:linear
+LIBS:regul
+LIBS:74xx
+LIBS:cmos4000
+LIBS:adc-dac
+LIBS:memory
+LIBS:xilinx
+LIBS:microcontrollers
+LIBS:dsp
+LIBS:microchip
+LIBS:analog_switches
+LIBS:motorola
+LIBS:texas
+LIBS:intel
+LIBS:audio
+LIBS:interface
+LIBS:digital-audio
+LIBS:philips
+LIBS:display
+LIBS:cypress
+LIBS:siliconi
+LIBS:opto
+LIBS:atmel
+LIBS:contrib
+LIBS:valves
+LIBS:ESP8266
+LIBS:tpj-cache
+EELAYER 25 0
+EELAYER END
+$Descr A4 11693 8268
+encoding utf-8
+Sheet 1 1
+Title ""
+Date ""
+Rev ""
+Comp ""
+Comment1 ""
+Comment2 ""
+Comment3 ""
+Comment4 ""
+$EndDescr
+$Comp
+L ESP-12E U2
+U 1 1 58BC5888
+P 5550 3000
+F 0 "U2" H 5550 2900 50  0000 C CNN
+F 1 "ESP-12E" H 5550 3100 50  0000 C CNN
+F 2 "ESP8266:ESP-12E" H 5550 3000 50  0001 C CNN
+F 3 "" H 5550 3000 50  0001 C CNN
+	1    5550 3000
+	1    0    0    -1  
+$EndComp
+$Comp
+L GND #PWR3
+U 1 1 58BC58E2
+P 6750 3650
+F 0 "#PWR3" H 6750 3400 50  0001 C CNN
+F 1 "GND" H 6750 3500 50  0000 C CNN
+F 2 "" H 6750 3650 50  0000 C CNN
+F 3 "" H 6750 3650 50  0000 C CNN
+	1    6750 3650
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	6450 3400 6750 3400
+Wire Wire Line
+	6750 2050 6750 3650
+$Comp
+L LD1117S33TR U1
+U 1 1 58BC5F84
+P 2050 2600
+F 0 "U1" H 2050 2850 50  0000 C CNN
+F 1 "LD1117S33TR" H 2050 2800 50  0000 C CNN
+F 2 "TO_SOT_Packages_THT:TO-220_Neutral123_Horizontal" H 2050 2700 50  0000 C CNN
+F 3 "" H 2050 2600 50  0000 C CNN
+	1    2050 2600
+	1    0    0    -1  
+$EndComp
+$Comp
+L GND #PWR2
+U 1 1 58BC607A
+P 2050 3200
+F 0 "#PWR2" H 2050 2950 50  0001 C CNN
+F 1 "GND" H 2050 3050 50  0000 C CNN
+F 2 "" H 2050 3200 50  0000 C CNN
+F 3 "" H 2050 3200 50  0000 C CNN
+	1    2050 3200
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	2050 2850 2050 3200
+$Comp
+L POT RV1
+U 1 1 58BC60B2
+P 3450 2800
+F 0 "RV1" H 3450 2720 50  0000 C CNN
+F 1 "10kOhm" H 3450 2800 50  0000 C CNN
+F 2 "Potentiometers:Potentiometer_WirePads_largePads" H 3450 2800 50  0001 C CNN
+F 3 "" H 3450 2800 50  0000 C CNN
+	1    3450 2800
+	0    1    1    0   
+$EndComp
+Wire Wire Line
+	4650 2800 3600 2800
+Wire Wire Line
+	1650 2550 1300 2550
+Wire Wire Line
+	1300 1250 1300 2650
+Wire Wire Line
+	2450 2550 3950 2550
+Wire Wire Line
+	3450 2550 3450 2650
+Connection ~ 2600 2550
+$Comp
+L CONN_01X03 P1
+U 1 1 58BC631B
+P 7100 1950
+F 0 "P1" H 7100 2150 50  0000 C CNN
+F 1 "CONN_01X03" V 7200 1950 50  0000 C CNN
+F 2 "Pin_Headers:Pin_Header_Angled_1x03" H 7100 1950 50  0001 C CNN
+F 3 "" H 7100 1950 50  0000 C CNN
+	1    7100 1950
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	6750 2050 6900 2050
+Connection ~ 6750 3400
+Wire Wire Line
+	4650 3100 4500 3100
+$Comp
+L R R1
+U 1 1 58BC6467
+P 4500 2350
+F 0 "R1" V 4580 2350 50  0000 C CNN
+F 1 "1kOhm" V 4500 2350 50  0000 C CNN
+F 2 "Resistors_ThroughHole:Resistor_Horizontal_RM7mm" V 4430 2350 50  0001 C CNN
+F 3 "" H 4500 2350 50  0000 C CNN
+	1    4500 2350
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	4500 3100 4500 2500
+Wire Wire Line
+	4500 1850 4500 2200
+$Comp
+L CP C3
+U 1 1 58BC6555
+P 6300 2150
+F 0 "C3" H 6325 2250 50  0000 L CNN
+F 1 "100uF" H 6325 2050 50  0000 L CNN
+F 2 "Capacitors_ThroughHole:C_Axial_D5_L11_P18" H 6338 2000 50  0001 C CNN
+F 3 "" H 6300 2150 50  0000 C CNN
+	1    6300 2150
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	6500 1850 6500 1850
+Wire Wire Line
+	6900 1950 1300 1950
+Connection ~ 1300 1950
+Wire Wire Line
+	4500 1850 6900 1850
+Wire Wire Line
+	6300 2000 6300 1950
+Connection ~ 6300 1950
+Wire Wire Line
+	6300 2300 6300 2350
+Wire Wire Line
+	6300 2350 6750 2350
+Connection ~ 6750 2350
+$Comp
+L CP C1
+U 1 1 58BC6897
+P 1300 2800
+F 0 "C1" H 1325 2900 50  0000 L CNN
+F 1 "100nF" H 1325 2700 50  0000 L CNN
+F 2 "Capacitors_ThroughHole:C_Axial_D5_L11_P18" H 1338 2650 50  0001 C CNN
+F 3 "" H 1300 2800 50  0000 C CNN
+	1    1300 2800
+	1    0    0    -1  
+$EndComp
+$Comp
+L CP C2
+U 1 1 58BC693B
+P 2600 2800
+F 0 "C2" H 2625 2900 50  0000 L CNN
+F 1 "10uF" H 2625 2700 50  0000 L CNN
+F 2 "Capacitors_ThroughHole:C_Axial_D5_L11_P18" H 2638 2650 50  0001 C CNN
+F 3 "" H 2600 2800 50  0000 C CNN
+	1    2600 2800
+	1    0    0    -1  
+$EndComp
+Connection ~ 1300 2550
+Wire Wire Line
+	1300 2950 1300 3150
+Wire Wire Line
+	1300 3150 3450 3150
+Connection ~ 2050 3150
+Wire Wire Line
+	2600 2650 2600 2550
+Wire Wire Line
+	2600 3150 2600 2950
+Wire Wire Line
+	3450 3150 3450 2950
+Connection ~ 2600 3150
+Wire Wire Line
+	4650 3400 3950 3400
+Wire Wire Line
+	3950 3400 3950 2550
+Connection ~ 3450 2550
+$Comp
+L USB_A P2
+U 1 1 58BC6E76
+P 1500 950
+F 0 "P2" H 1700 750 50  0000 C CNN
+F 1 "USB_A" H 1450 1150 50  0000 C CNN
+F 2 "Connect:USB_Micro-B" V 1450 850 50  0001 C CNN
+F 3 "" V 1450 850 50  0000 C CNN
+	1    1500 950 
+	1    0    0    -1  
+$EndComp
+$Comp
+L GND #PWR1
+U 1 1 58BC6FBA
+P 1600 1350
+F 0 "#PWR1" H 1600 1100 50  0001 C CNN
+F 1 "GND" H 1600 1200 50  0000 C CNN
+F 2 "" H 1600 1350 50  0000 C CNN
+F 3 "" H 1600 1350 50  0000 C CNN
+	1    1600 1350
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	1600 1350 1600 1250
+Wire Wire Line
+	1800 850  1850 850 
+Wire Wire Line
+	1850 850  1850 1300
+Wire Wire Line
+	1850 1300 1600 1300
+Connection ~ 1600 1300
+$EndSCHEMATC

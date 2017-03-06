@@ -3,7 +3,9 @@
 #include <WiFiUdp.h>
 #include <ArduinoJson.h>
 #include <Adafruit_NeoPixel.h>
+#include <TimeLib.h>
 #define PIN 14
+#define POT 0
 
 // Parameter 1 = number of pixels in strip
 // Parameter 2 = Arduino pin number (most are valid)
@@ -16,13 +18,19 @@ const char *password = "387iswhereweare";
 
 const int timezone_offset = -18000;
 
-const char* tod_host = "api.sunrise-sunset.org";
+const char* tod_host = "api.openweathermap.org";
+const char* api_key = "ab33624b9ab307c2d056de2359eaedf5";
+const char* my_city = "toronto";
+const char* my_country = "ca";
 
-const char* my_lat = "43.6532";
-const char* my_long = "-79.3832";
+//const char* my_lat = "43.7001";
+//const char* my_long = "-79.4163";
 
-void theaterChase(uint32_t c, uint8_t wait);
+time_t time_next_event;
+
 void colorWipe(uint32_t c, uint8_t wait);
+void skySim(uint32_t outer, uint32_t inner);
+void skyTransition();
 
 WiFiUDP ntpUDP;
 WiFiClient client;
@@ -84,10 +92,10 @@ void printScannedNetworks() {
 void checkNTPServer() {
     timeClient.update();
     Serial.println(timeClient.getFormattedTime());
-    Serial.println(timeClient.getEpochTime());
+    setTime(timeClient.getEpochTime());
 }
 
-void getTODRequest(const String &my_lat, const String &my_long, String &dawn_time, String &dusk_time) {
+void getTODRequest() {
     String line;
     const int httpPort = 80;
 
@@ -96,12 +104,12 @@ void getTODRequest(const String &my_lat, const String &my_long, String &dawn_tim
         return;
     }
 
-    // We now create a URI for the request
-    String url = "/json?lat=";
-    url += my_lat;
-    url += "&lng=";
-    url += my_long;
-    url += "&formatted=0";
+    String url = "/data/2.5/weather?q=";
+    url += my_city;
+    url += ",";
+    url += my_country;
+    url += "&APPID=";
+    url += api_key;
 
     Serial.print("Requesting URL: ");
     Serial.println(url);
@@ -119,18 +127,20 @@ void getTODRequest(const String &my_lat, const String &my_long, String &dawn_tim
         }
     }
 
-    // Read all the lines of the reply from server and print them to Serial
-    while(client.available()) {
-        line += client.readStringUntil('\r');
-        if (line.endsWith("1e2"))
-            line="";
-        if (line.endsWith("OK\"}"))
+
+
+    Serial.println("request sent");
+    while (client.connected()) {
+        String line = client.readStringUntil('\n');
+        if (line == "\r") {
+            Serial.println("headers received");
             break;
+        }
     }
-    // It's a reference to the JsonObject, the actual bytes are inside the
-    // JsonBuffer with all the other nodes of the object tree.
-    // Memory is freed when jsonBuffer goes out of scope.
+
+    line = client.readStringUntil('\n');
     Serial.print(line);
+
     DynamicJsonBuffer jsonBuffer;
     JsonObject &root = jsonBuffer.parseObject(line);
     if (!root.success()) {
@@ -138,8 +148,8 @@ void getTODRequest(const String &my_lat, const String &my_long, String &dawn_tim
       return;
     }
 
-    String ddawn_time = root["results"]["sunrise"];
-    String ddusk_time = root["results"]["sunset"];
+    const char* ddawn_time = root["sys"]["sunrise"];
+    String ddusk_time = root["sys"]["sunset"];
     Serial.println("dawn time: ");
     Serial.println(ddawn_time);
     Serial.println("dusk time: ");
@@ -149,25 +159,26 @@ void getTODRequest(const String &my_lat, const String &my_long, String &dawn_tim
 }
 
 void loop() {
-    printScannedNetworks();
+    //printScannedNetworks();
     String dawn_time;
     String dusk_time;
 
   // Some example procedures showing how to display to the pixels:
-    colorWipe(strip.Color(0, 0, 2), 5); // Red
-    delay(2000);
-    colorWipe(strip.Color(5, 0, 15), 5);
-    delay(2000);
-    colorWipe(strip.Color(127, 127, 192), 5);
-    delay(2000);
-    colorWipe(strip.Color(1, 1, 1), 5);
-    delay(2000);
+    //colorWipe(strip.Color(0, 0, 2), 5); // Red
+    //delay(2000);
 
-    getTODRequest(my_lat, my_long, dawn_time, dusk_time);
+
+    getTODRequest();
+    //checkNTPServer();
+
     for(;;) {
-        checkNTPServer();
         // Wait a bit before scanning again
-        delay(1000);
+        skyTransition();
+        Serial.println(now());
+        //strip.setBrightness((analogRead(POT)>>4));
+        //strip.show();
+        //skySim(strip.Color(0, 0, 255), strip.Color(127, 127, 0));
+        //delay(500);
     }
 }
 
@@ -178,4 +189,23 @@ void colorWipe(uint32_t c, uint8_t wait) {
         strip.show();
         delay(wait);
     }
+}
+
+void skyTransition() {
+    for (int i = 0; i < 255; i++) {
+        skySim(strip.Color(0, i, 255), strip.Color(127, i, 255));
+        delay(20);
+    }
+}
+void skySim(uint32_t outer, uint32_t inner) {
+    uint8_t x = strip.numPixels() / 3;
+    //Serial.println(strip.getBrightness());
+    for (uint8_t i=0; i<strip.numPixels(); i++) {
+        if ((i > x) && (i < (strip.numPixels() - x - 1)))
+            strip.setPixelColor(i, inner);
+        else
+            strip.setPixelColor(i, outer);
+    }
+    strip.setBrightness((analogRead(POT)>>4));
+    strip.show();
 }

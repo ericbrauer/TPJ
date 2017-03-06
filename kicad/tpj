@@ -1,0 +1,19 @@
+Source,/home/eric/git/TPJ/kicad/tpj.sch
+Kicad Rev,Eeschema 4.0.4+dfsg1-stable
+Generated Date,Sun 05 Mar 2017 04:08:58 PM EST
+
+Title,Not Set
+Company,Not Set
+Revision,Not Set
+Date Issue,Not Set
+
+Reference,Value,Library,Library Ref
+U2,ESP-12E,ESP8266,ESP-12E
+U1,LD1117S33TR,regul,LD1117S33TR
+RV1,10kOhm,device,POT
+P1,CONN_01X03,conn,CONN_01X03
+R1,1kOhm,device,R
+C3,100uF,device,CP
+C1,100nF,device,CP
+C2,10uF,device,CP
+P2,USB_A,conn,USB_A
