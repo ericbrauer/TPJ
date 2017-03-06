@@ -148,6 +148,7 @@ void getTODRequest() {
       return;
     }
 
+    setTime(root["dt"]);
     const char* ddawn_time = root["sys"]["sunrise"];
     String ddusk_time = root["sys"]["sunset"];
     Serial.println("dawn time: ");
