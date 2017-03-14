@@ -4,6 +4,10 @@
 #include <ArduinoJson.h>
 #include <Adafruit_NeoPixel.h>
 #include <TimeLib.h>
+#include <ESP8266WebServer.h>
+#include <ESP8266mDNS.h>
+#include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager WiFi Configuration Magic
+
 #define PIN 14
 #define POT 0
 
@@ -12,6 +16,9 @@
 // Parameter 3 = pixel type flags, add together as needed:
 //   NEO_KHZ800  800 KHz bitstream (most NeoPixel products w/WS2812 LEDs)
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(8, PIN, NEO_GRB + NEO_KHZ800);
+
+ESP8266WebServer server(80);
+MDNSResponder mdns;
 
 const char *ssid     = "Goodsprings";
 const char *password = "387iswhereweare";
@@ -40,6 +47,24 @@ WiFiClient client;
 // update interval (in milliseconds, can be changed using setUpdateInterval() ).
 NTPClient timeClient(ntpUDP, "ca.pool.ntp.org", timezone_offset, 60000);
 
+void handleRoot() {
+    server.send(200, "text/plain", "hello from esp8266!");
+}
+
+void handleNotFound(){
+    String message = "File Not Found\n\n";
+    message += "URI: ";
+    message += server.uri();
+    message += "\nMethod: ";
+    message += (server.method() == HTTP_GET)?"GET":"POST";
+    message += "\nArguments: ";
+    message += server.args();
+    message += "\n";
+    for (uint8_t i=0; i<server.args(); i++){
+        message += " " + server.argName(i) + ": " + server.arg(i) + "\n";
+    }
+    server.send(404, "text/plain", message);
+}
 
 void setup() {
     Serial.begin(9600);
@@ -48,6 +73,11 @@ void setup() {
     //WiFi.disconnect();
     //delay(2000);
     //Serial.println("Setup done");
+
+    // THIS WORKS, but some questions about reconnecting...
+    //WiFiManager wifiManager;
+    //wifiManager.autoConnect("DIGITAL SKYLIGHT");
+
 
     WiFi.begin(ssid, password);
     while ( WiFi.status() != WL_CONNECTED ) {
@@ -60,8 +90,28 @@ void setup() {
     strip.begin();
     strip.show(); // Initialize all pixels to 'off'
 
+    server.on("/", handleRoot);
 
+    server.on("/inline", []() {
+    server.send(200, "text/plain", "this works as well");
+    });
+
+    if (mdns.begin("esp8266", WiFi.localIP())) {
+    Serial.println("MDNS responder started");
+    }
+
+    server.onNotFound(handleNotFound);
+
+    server.begin();
+    Serial.println("HTTP server started");
+
+    Serial.println("");
+    Serial.print("Connected to ");
+    Serial.println(ssid);
+    Serial.print("IP address: ");
+    Serial.println(WiFi.localIP());
 }
+
 
 void printScannedNetworks() {
     Serial.println("scan start");
@@ -88,6 +138,8 @@ void printScannedNetworks() {
     }
     Serial.println("");
 }
+
+
 
 void checkNTPServer() {
     timeClient.update();
@@ -172,14 +224,17 @@ void loop() {
     getTODRequest();
     //checkNTPServer();
 
+
+
     for(;;) {
         // Wait a bit before scanning again
-        skyTransition();
+        server.handleClient();
+        //skyTransition();
         Serial.println(now());
         //strip.setBrightness((analogRead(POT)>>4));
         //strip.show();
         //skySim(strip.Color(0, 0, 255), strip.Color(127, 127, 0));
-        //delay(500);
+        delay(500);
     }
 }
 
