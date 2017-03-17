@@ -30,6 +30,8 @@ const char* api_key = "ab33624b9ab307c2d056de2359eaedf5";
 const char* my_city = "toronto";
 const char* my_country = "ca";
 
+String webPage = "";
+
 //const char* my_lat = "43.7001";
 //const char* my_long = "-79.4163";
 
@@ -66,6 +68,11 @@ void handleNotFound(){
     server.send(404, "text/plain", message);
 }
 
+void setup_gui() {
+    webPage += "<h1>ESP8266 Web Server</h1><p>Socket #1 <a href=\"socket1On\"><button>ON</button></a>&nbsp;<a href=\"socket1Off\"><button>OFF</button></a></p>";
+    webPage += "<p>Socket #2 <a href=\"socket2On\"><button>ON</button></a>&nbsp;<a href=\"socket2Off\"><button>OFF</button></a></p>";
+}
+
 void setup() {
     Serial.begin(9600);
     // Set WiFi to station mode and disconnect from an AP if it was previously connected
@@ -75,15 +82,15 @@ void setup() {
     //Serial.println("Setup done");
 
     // THIS WORKS, but some questions about reconnecting...
-    //WiFiManager wifiManager;
-    //wifiManager.autoConnect("DIGITAL SKYLIGHT");
+    WiFiManager wifiManager;
+    wifiManager.autoConnect("DIGITAL SKYLIGHT");
 
 
-    WiFi.begin(ssid, password);
-    while ( WiFi.status() != WL_CONNECTED ) {
-        delay ( 500 );
-        Serial.print ( "." );
-    }
+    //WiFi.begin(ssid, password);
+    //while ( WiFi.status() != WL_CONNECTED ) {
+    //    delay ( 500 );
+    //    Serial.print ( "." );
+    //}
 
     timeClient.begin();
 
