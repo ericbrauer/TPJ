@@ -70,7 +70,8 @@ void handleRoot() {
 void handleSubmit() {
     if (server.args() > 0 ) {
         for ( uint8_t i = 0; i < server.args(); i++ ) {
-            Serial.println(server.args(i));
+            Serial.println(server.argName(i));
+            Serial.println(server.arg(i));
             //if (!server.arg(i).isnumber() ) {
             //    handleUserInputError();
             //    return;
@@ -130,9 +131,10 @@ void setup() {
 
     server.on("/", handleRoot);
 
-    server.on("/submit", []() {
-    server.send(200, "text/plain", "submit received");
-    });
+    server.on("/submit", handleSubmit);
+    //server.on("/submit", []() {
+    //server.send(200, "text/plain", "submit received");
+    //});
 
     if (mdns.begin("skylight", WiFi.localIP())) {
     Serial.println("MDNS responder started");
