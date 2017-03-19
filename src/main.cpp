@@ -50,7 +50,7 @@ WiFiClient client;
 NTPClient timeClient(ntpUDP, "ca.pool.ntp.org", timezone_offset, 60000);
 
 void handleRoot() {
-    server.send(200, "text/plain", "hello from esp8266!");
+    server.send(200, "text/html", webPage);
 }
 
 void handleNotFound(){
@@ -69,8 +69,22 @@ void handleNotFound(){
 }
 
 void setup_gui() {
-    webPage += "<h1>ESP8266 Web Server</h1><p>Socket #1 <a href=\"socket1On\"><button>ON</button></a>&nbsp;<a href=\"socket1Off\"><button>OFF</button></a></p>";
-    webPage += "<p>Socket #2 <a href=\"socket2On\"><button>ON</button></a>&nbsp;<a href=\"socket2Off\"><button>OFF</button></a></p>";
+    //webPage += "<h1>ESP8266 Web Server</h1><p>Socket #1 <a href=\"socket1On\"><button>ON</button></a>&nbsp;<a href=\"socket1Off\"><button>OFF</button></a></p>";
+    //webPage += "<p>Socket #2 <a href=\"socket2On\"><button>ON</button></a>&nbsp;<a href=\"socket2Off\"><button>OFF</button></a></p>";
+    webPage += "<h1>Skylight</h1>";
+    webPage += "<p>Connected To</p>";
+    webPage += "<p>Time is now</p>";
+    webPage += "<h3>Set Sunrise:</h3>";
+    webPage += "<form action='http://192.168.4.1/submit' method='get'>";
+    webPage += "<p>Hour: <input type='text' name='rise_hour' maxlength='2' style='width:50px;'>";
+    webPage += "Minute:  <input type='text' name='rise_min' maxlength='2' style='width:50px;'>";
+    webPage += "AM  <input type='submit' value='Save'></form> ";
+    webPage += "<h3>Set Sunset:</h3> ";
+    webPage += "<form action='http://192.168.4.1/submit' method='get'>";
+    webPage += "<p>Hour: <input type='text' name='set_hour' maxlength='2' style='width:50px;'>";
+    webPage += "Minute:  <input type='text' name='set_min' maxlength='2' style='width:50px;'>";
+    webPage += "PM  <input type='submit' value='Save'></form>";
+    webPage += "<p><a href='demo'><button style='width:100%;'>Run a Demo</button></a>&nbsp;</p>";
 }
 
 void setup() {
@@ -96,6 +110,7 @@ void setup() {
 
     strip.begin();
     strip.show(); // Initialize all pixels to 'off'
+    setup_gui();
 
     server.on("/", handleRoot);
 
@@ -103,7 +118,7 @@ void setup() {
     server.send(200, "text/plain", "this works as well");
     });
 
-    if (mdns.begin("esp8266", WiFi.localIP())) {
+    if (mdns.begin("skylight", WiFi.localIP())) {
     Serial.println("MDNS responder started");
     }
 
