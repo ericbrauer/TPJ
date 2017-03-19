@@ -68,26 +68,91 @@ void handleRoot() {
 }
 
 void handleSubmit() {
+    char sunset_flag = 0;
+    int hour = 0;
+    int minute = 0;
     if (server.args() > 0 ) {
         for ( uint8_t i = 0; i < server.args(); i++ ) {
             Serial.println(server.argName(i));
             Serial.println(server.arg(i));
-            //if (!server.arg(i).isnumber() ) {
-            //    handleUserInputError();
-            //    return;
-            //}
-            //if (server.argName(i) == "rise_hour") {
-            //    if (!server.argName(i) )
-            //    else {
-            //
-            //    }
-            //}
+            if (!server.arg(i).isnumber() ) {
+                handleUserInputError();
+                return;
+            }
+            if (server.argName(i) == "rise_hour") {
+                if (!server.arg(i) > 12 || !server.arg(i) < 1) {
+                    handleUserInputError();
+                    return;
+                }
+                else {
+                    int hour = server.arg(i);
+                }
+            if (server.argName(i) == "set_hour") {
+                if (!server.arg(i) > 12 || !server.arg(i) < 1) {
+                    handleUserInputError();
+                    return;
+                }
+                else {
+                    hour = server.arg(i);
+                    sunset_flag = 1;
+                }
+            if (server.argName(i) == "rise_min") {
+                if (!server.arg(i) > 59 || !server.arg(i) < 0) {
+                    handleUserInputError();
+                    return;
+                }
+                else {
+                    minute = server.arg(i);
+                }
+            }
+            if (server.argName(i) == "set_min") {
+                if (!server.arg(i) > 59 || !server.arg(i) < 0) {
+                    handleUserInputError();
+                    return;
+                }
+                else {
+                    minute = server.arg(i);
+                }
+            }
         }
     }
+    if (sunset_flag)
+        parseSunset(hour, minute);
+    else
+        parseSunrise(hour, minute);
+    handleAck();
 }
 
-void handleUserInputError() {
+void parseSunrise(int hour, int minute) {
+    TimeElements tm;
+    breakTime(now(), tm);
+    Serial.println(tm.Hour);
+    Serial.println(hour);
 
+}
+
+void parseSunset(int hour, int minute) {
+    TimeElements tm;
+    breakTime(now(), tm);
+    Serial.println(tm.Hour);
+    Serial.println(hour);
+}
+
+void handleAck() {
+    String message = "";
+    message += "<p><b>Alarm has been set.</b></p>";
+    message += "<p>Press OK to return to previous page.</p>&nbsp;";
+    message += "<a href='/'><button>OK</button></a>";
+    server.send(200, "text/html", message);
+}
+
+
+void handleUserInputError() {
+    String message = "";
+    message += "<p><b>Error: Please enter a valid time.</b></p>";
+    message += "<p>Press OK to return to previous page.</p>&nbsp;";
+    message += "<a href='/'><button>OK</button></a>";
+    server.send(200, "text/html", message);
 }
 
 void handleNotFound(){
