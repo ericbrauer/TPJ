@@ -40,6 +40,11 @@ time_t time_next_event;
 void colorWipe(uint32_t c, uint8_t wait);
 void skySim(uint32_t outer, uint32_t inner);
 void skyTransition();
+void handleUserInputError();
+void handleSubmit();
+void handleAck();
+void parseSunrise(int hour, int minute);
+void parseSunset(int hour, int minute);
 
 WiFiUDP ntpUDP;
 WiFiClient client;
@@ -50,6 +55,7 @@ WiFiClient client;
 NTPClient timeClient(ntpUDP, "ca.pool.ntp.org", timezone_offset, 60000);
 
 void handleRoot() {
+    String webPage = "";
     webPage += "<h1>Skylight</h1>";
     webPage += "<p>Connected To</p>";
     webPage += "<p>Time is now</p>";
@@ -69,49 +75,53 @@ void handleRoot() {
 
 void handleSubmit() {
     char sunset_flag = 0;
+    int x;
     int hour = 0;
     int minute = 0;
     if (server.args() > 0 ) {
         for ( uint8_t i = 0; i < server.args(); i++ ) {
             Serial.println(server.argName(i));
             Serial.println(server.arg(i));
-            if (!server.arg(i).isnumber() ) {
-                handleUserInputError();
-                return;
-            }
+            x = server.arg(i).toInt();
+            //if (!isNumber(x)) {
+            //    handleUserInputError();
+            //    return;
+            //}
             if (server.argName(i) == "rise_hour") {
-                if (!server.arg(i) > 12 || !server.arg(i) < 1) {
+                if ((x > 12) || (x < 1)) {
                     handleUserInputError();
                     return;
                 }
                 else {
-                    int hour = server.arg(i);
+                    hour = x;
                 }
+            }
             if (server.argName(i) == "set_hour") {
-                if (!server.arg(i) > 12 || !server.arg(i) < 1) {
+                if ((x > 12) || (x < 1)) {
                     handleUserInputError();
                     return;
                 }
                 else {
-                    hour = server.arg(i);
+                    hour = x;
                     sunset_flag = 1;
                 }
+            }
             if (server.argName(i) == "rise_min") {
-                if (!server.arg(i) > 59 || !server.arg(i) < 0) {
+                if ((x > 59) || (x < 0)) {
                     handleUserInputError();
                     return;
                 }
                 else {
-                    minute = server.arg(i);
+                    minute = x;
                 }
             }
             if (server.argName(i) == "set_min") {
-                if (!server.arg(i) > 59 || !server.arg(i) < 0) {
+                if ((x > 59) || (x < 0)) {
                     handleUserInputError();
                     return;
                 }
                 else {
-                    minute = server.arg(i);
+                    minute = x;
                 }
             }
         }
