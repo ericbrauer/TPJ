@@ -23,7 +23,8 @@ MDNSResponder mdns;
 const char *ssid     = "Goodsprings";
 const char *password = "387iswhereweare";
 
-const int timezone_offset = -18000;
+const int timezone_offset = -14400; //dst
+//const int timezone_offset = -18000;
 
 const char* tod_host = "api.openweathermap.org";
 const char* api_key = "ab33624b9ab307c2d056de2359eaedf5";
