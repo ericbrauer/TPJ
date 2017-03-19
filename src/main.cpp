@@ -75,12 +75,12 @@ void setup_gui() {
     webPage += "<p>Connected To</p>";
     webPage += "<p>Time is now</p>";
     webPage += "<h3>Set Sunrise:</h3>";
-    webPage += "<form action='http://192.168.4.1/submit' method='get'>";
+    webPage += "<form action='submit' method='get'>";
     webPage += "<p>Hour: <input type='text' name='rise_hour' maxlength='2' style='width:50px;'>";
     webPage += "Minute:  <input type='text' name='rise_min' maxlength='2' style='width:50px;'>";
     webPage += "AM  <input type='submit' value='Save'></form> ";
     webPage += "<h3>Set Sunset:</h3> ";
-    webPage += "<form action='http://192.168.4.1/submit' method='get'>";
+    webPage += "<form action='submit' method='get'>";
     webPage += "<p>Hour: <input type='text' name='set_hour' maxlength='2' style='width:50px;'>";
     webPage += "Minute:  <input type='text' name='set_min' maxlength='2' style='width:50px;'>";
     webPage += "PM  <input type='submit' value='Save'></form>";
@@ -114,8 +114,8 @@ void setup() {
 
     server.on("/", handleRoot);
 
-    server.on("/inline", []() {
-    server.send(200, "text/plain", "this works as well");
+    server.on("/submit", []() {
+    server.send(200, "text/plain", "submit received");
     });
 
     if (mdns.begin("skylight", WiFi.localIP())) {
