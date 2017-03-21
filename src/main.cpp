@@ -4,6 +4,10 @@
 #include <ArduinoJson.h>
 #include <Adafruit_NeoPixel.h>
 #include <TimeLib.h>
+#include <ESP8266WebServer.h>
+#include <ESP8266mDNS.h>
+#include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager WiFi Configuration Magic
+
 #define PIN 14
 #define POT 0
 
@@ -13,15 +17,21 @@
 //   NEO_KHZ800  800 KHz bitstream (most NeoPixel products w/WS2812 LEDs)
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(8, PIN, NEO_GRB + NEO_KHZ800);
 
+ESP8266WebServer server(80);
+MDNSResponder mdns;
+
 const char *ssid     = "Goodsprings";
 const char *password = "387iswhereweare";
 
-const int timezone_offset = -18000;
+const int timezone_offset = -14400; //dst
+//const int timezone_offset = -18000;
 
 const char* tod_host = "api.openweathermap.org";
 const char* api_key = "ab33624b9ab307c2d056de2359eaedf5";
 const char* my_city = "toronto";
 const char* my_country = "ca";
+
+String webPage = "";
 
 //const char* my_lat = "43.7001";
 //const char* my_long = "-79.4163";
@@ -30,7 +40,14 @@ time_t time_next_event;
 
 void colorWipe(uint32_t c, uint8_t wait);
 void skySim(uint32_t outer, uint32_t inner);
-void skyTransition();
+void skyTransition(int wait);
+void handleUserInputError();
+void handleSubmit();
+void handleDemo();
+void handleAck();
+void parseSunrise(int hour, int minute);
+void parseSunset(int hour, int minute);
+void changeBrightness();
 
 WiFiUDP ntpUDP;
 WiFiClient client;
@@ -40,6 +57,140 @@ WiFiClient client;
 // update interval (in milliseconds, can be changed using setUpdateInterval() ).
 NTPClient timeClient(ntpUDP, "ca.pool.ntp.org", timezone_offset, 60000);
 
+void handleRoot() {
+    String webPage = "";
+    webPage += "<h1>Skylight</h1>";
+    webPage += "<p>Connected To</p>";
+    webPage += "<p>Time is now</p>";
+    webPage += "<h3>Set Sunrise:</h3>";
+    webPage += "<form action='submit' method='POST'>";
+    webPage += "<p>Hour: <input type='text' name='rise_hour' maxlength='2' style='width:50px;'>";
+    webPage += "Minute:  <input type='text' name='rise_min' maxlength='2' style='width:50px;'>";
+    webPage += "AM  <input type='submit' value='Save'></form> ";
+    webPage += "<h3>Set Sunset:</h3> ";
+    webPage += "<form action='submit' method='POST'>";
+    webPage += "<p>Hour: <input type='text' name='set_hour' maxlength='2' style='width:50px;'>";
+    webPage += "Minute:  <input type='text' name='set_min' maxlength='2' style='width:50px;'>";
+    webPage += "PM  <input type='submit' value='Save'></form>";
+    webPage += "<p><a href='demo'><button style='width:100%;'>Run a Demo</button></a>&nbsp;</p>";
+    server.send(200, "text/html", webPage);
+}
+
+void handleSubmit() {
+    char sunset_flag = 0;
+    int x;
+    int hour = 0;
+    int minute = 0;
+    if (server.args() > 0 ) {
+        for ( uint8_t i = 0; i < server.args(); i++ ) {
+            Serial.println(server.argName(i));
+            Serial.println(server.arg(i));
+            x = server.arg(i).toInt();
+            //if (!isNumber(x)) {
+            //    handleUserInputError();
+            //    return;
+            //}
+            if (server.argName(i) == "rise_hour") {
+                if ((x > 12) || (x < 1)) {
+                    handleUserInputError();
+                    return;
+                }
+                else {
+                    hour = x;
+                }
+            }
+            if (server.argName(i) == "set_hour") {
+                if ((x > 12) || (x < 1)) {
+                    handleUserInputError();
+                    return;
+                }
+                else {
+                    hour = x;
+                    sunset_flag = 1;
+                }
+            }
+            if (server.argName(i) == "rise_min") {
+                if ((x > 59) || (x < 0)) {
+                    handleUserInputError();
+                    return;
+                }
+                else {
+                    minute = x;
+                }
+            }
+            if (server.argName(i) == "set_min") {
+                if ((x > 59) || (x < 0)) {
+                    handleUserInputError();
+                    return;
+                }
+                else {
+                    minute = x;
+                }
+            }
+        }
+    }
+    if (sunset_flag)
+        parseSunset(hour, minute);
+    else
+        parseSunrise(hour, minute);
+    handleAck();
+}
+
+void parseSunrise(int hour, int minute) {
+    TimeElements tm;
+    breakTime(now(), tm);
+    Serial.println(tm.Hour);
+    Serial.println(hour);
+
+}
+
+void parseSunset(int hour, int minute) {
+    TimeElements tm;
+    breakTime(now(), tm);
+    Serial.println(tm.Hour);
+    Serial.println(hour);
+}
+
+void handleAck() {
+    String message = "";
+    message += "<p><b>Alarm has been set.</b></p>";
+    message += "<p>Press OK to return to previous page.</p>&nbsp;";
+    message += "<a href='/'><button>OK</button></a>";
+    server.send(200, "text/html", message);
+}
+
+
+void handleUserInputError() {
+    String message = "";
+    message += "<p><b>Error: Please enter a valid time.</b></p>";
+    message += "<p>Press OK to return to previous page.</p>&nbsp;";
+    message += "<a href='/'><button>OK</button></a>";
+    server.send(200, "text/html", message);
+}
+
+void handleDemo() {
+    String message = "";
+    message += "<p><b>Running demo...</b></p>";
+    message += "<p>Press OK to return to previous page.</p>&nbsp;";
+    message += "<a href='/'><button>OK</button></a>";
+    server.send(200, "text/html", message);
+    skyTransition(20);
+}
+
+void handleNotFound(){
+    String message = "File Not Found\n\n";
+    message += "URI: ";
+    message += server.uri();
+    message += "\nMethod: ";
+    message += (server.method() == HTTP_GET)?"GET":"POST";
+    message += "\nArguments: ";
+    message += server.args();
+    message += "\n";
+    for (uint8_t i=0; i<server.args(); i++){
+        message += " " + server.argName(i) + ": " + server.arg(i) + "\n";
+    }
+    server.send(404, "text/plain", message);
+}
 
 void setup() {
     Serial.begin(9600);
@@ -49,19 +200,45 @@ void setup() {
     //delay(2000);
     //Serial.println("Setup done");
 
-    WiFi.begin(ssid, password);
-    while ( WiFi.status() != WL_CONNECTED ) {
-        delay ( 500 );
-        Serial.print ( "." );
-    }
+    // THIS WORKS, but some questions about reconnecting...
+    WiFiManager wifiManager;
+    wifiManager.autoConnect("DIGITAL SKYLIGHT");
+
+
+    //WiFi.begin(ssid, password);
+    //while ( WiFi.status() != WL_CONNECTED ) {
+    //    delay ( 500 );
+    //    Serial.print ( "." );
+    //}
 
     timeClient.begin();
 
     strip.begin();
     strip.show(); // Initialize all pixels to 'off'
 
+    server.on("/", handleRoot);
 
+    server.on("/submit", handleSubmit);
+    server.on("/demo", handleDemo);
+
+    if (mdns.begin("skylight", WiFi.localIP())) {
+    Serial.println("MDNS responder started");
+    }
+
+    server.onNotFound(handleNotFound);
+
+    server.begin();
+    Serial.println("HTTP server started");
+
+    Serial.println("");
+    Serial.print("Connected to ");
+    Serial.println(ssid);
+    Serial.print("IP address: ");
+    Serial.println(WiFi.localIP());
+
+    attachInterrupt(POT, changeBrightness, CHANGE);
 }
+
 
 void printScannedNetworks() {
     Serial.println("scan start");
@@ -88,6 +265,8 @@ void printScannedNetworks() {
     }
     Serial.println("");
 }
+
+
 
 void checkNTPServer() {
     timeClient.update();
@@ -172,14 +351,18 @@ void loop() {
     getTODRequest();
     //checkNTPServer();
 
+
+
     for(;;) {
         // Wait a bit before scanning again
-        skyTransition();
+        server.handleClient();
+        //skyTransition();
         Serial.println(now());
         //strip.setBrightness((analogRead(POT)>>4));
         //strip.show();
         //skySim(strip.Color(0, 0, 255), strip.Color(127, 127, 0));
-        //delay(500);
+        delay(500);
+        changeBrightness();
     }
 }
 
@@ -192,21 +375,27 @@ void colorWipe(uint32_t c, uint8_t wait) {
     }
 }
 
-void skyTransition() {
+void changeBrightness() {
+    strip.setBrightness((analogRead(POT)>>4));
+    //Serial.println("brightness interrupt");
+    //Serial.println((analogRead(POT)>>4));
+}
+
+void skyTransition(int wait) {
     for (int i = 0; i < 255; i++) {
         skySim(strip.Color(0, i, 255), strip.Color(127, i, 255));
-        delay(20);
+        delay(wait);
     }
 }
 void skySim(uint32_t outer, uint32_t inner) {
     uint8_t x = strip.numPixels() / 3;
-    //Serial.println(strip.getBrightness());
+    Serial.println(strip.getBrightness());
     for (uint8_t i=0; i<strip.numPixels(); i++) {
         if ((i > x) && (i < (strip.numPixels() - x - 1)))
             strip.setPixelColor(i, inner);
         else
             strip.setPixelColor(i, outer);
     }
-    strip.setBrightness((analogRead(POT)>>4));
+    changeBrightness();
     strip.show();
 }
