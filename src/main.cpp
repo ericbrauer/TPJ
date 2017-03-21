@@ -40,7 +40,9 @@ time_t time_next_event;
 
 void colorWipe(uint32_t c, uint8_t wait);
 void skySim(uint32_t outer, uint32_t inner);
-void skyTransition(int wait);
+void skyTransition1(int wait);
+void skyTransition2(int wait);
+void skyTransition3(int wait);
 void handleUserInputError();
 void handleSubmit();
 void handleDemo();
@@ -174,7 +176,7 @@ void handleDemo() {
     message += "<p>Press OK to return to previous page.</p>&nbsp;";
     message += "<a href='/'><button>OK</button></a>";
     server.send(200, "text/html", message);
-    skyTransition(20);
+    skyTransition1(20);
 }
 
 void handleNotFound(){
@@ -356,7 +358,9 @@ void loop() {
     for(;;) {
         // Wait a bit before scanning again
         server.handleClient();
-        //skyTransition();
+        skyTransition1(20);
+        skyTransition2(20);
+        skyTransition3(20);
         Serial.println(now());
         //strip.setBrightness((analogRead(POT)>>4));
         //strip.show();
@@ -377,16 +381,32 @@ void colorWipe(uint32_t c, uint8_t wait) {
 
 void changeBrightness() {
     strip.setBrightness((analogRead(POT)>>4));
+    strip.show();
     //Serial.println("brightness interrupt");
     //Serial.println((analogRead(POT)>>4));
 }
 
-void skyTransition(int wait) {
+void skyTransition1(int wait) {
     for (int i = 0; i < 255; i++) {
-        skySim(strip.Color(0, i, 255), strip.Color(127, i, 255));
+        skySim(strip.Color(0, 0, (i/2)), strip.Color((i/2), 0, i));
         delay(wait);
     }
 }
+
+void skyTransition2(int wait) {
+    for (int i = 0; i < 255; i++) {
+        skySim(strip.Color((i/2), 0, (127+(i/2))), strip.Color((127+(i/2)), i, (255-i)));
+        delay(wait);
+    }
+}
+
+void skyTransition3(int wait) {
+    for (int i = 0; i < 255; i++) {
+        skySim(strip.Color((127-(i/2)), i, 255), strip.Color(255, 255, i));
+        delay(wait);
+    }
+}
+
 void skySim(uint32_t outer, uint32_t inner) {
     uint8_t x = strip.numPixels() / 3;
     Serial.println(strip.getBrightness());
