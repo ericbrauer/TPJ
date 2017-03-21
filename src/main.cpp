@@ -40,12 +40,14 @@ time_t time_next_event;
 
 void colorWipe(uint32_t c, uint8_t wait);
 void skySim(uint32_t outer, uint32_t inner);
-void skyTransition();
+void skyTransition(int wait);
 void handleUserInputError();
 void handleSubmit();
+void handleDemo();
 void handleAck();
 void parseSunrise(int hour, int minute);
 void parseSunset(int hour, int minute);
+void changeBrightness();
 
 WiFiUDP ntpUDP;
 WiFiClient client;
@@ -166,6 +168,15 @@ void handleUserInputError() {
     server.send(200, "text/html", message);
 }
 
+void handleDemo() {
+    String message = "";
+    message += "<p><b>Running demo...</b></p>";
+    message += "<p>Press OK to return to previous page.</p>&nbsp;";
+    message += "<a href='/'><button>OK</button></a>";
+    server.send(200, "text/html", message);
+    skyTransition(20);
+}
+
 void handleNotFound(){
     String message = "File Not Found\n\n";
     message += "URI: ";
@@ -208,9 +219,7 @@ void setup() {
     server.on("/", handleRoot);
 
     server.on("/submit", handleSubmit);
-    //server.on("/submit", []() {
-    //server.send(200, "text/plain", "submit received");
-    //});
+    server.on("/demo", handleDemo);
 
     if (mdns.begin("skylight", WiFi.localIP())) {
     Serial.println("MDNS responder started");
@@ -226,6 +235,8 @@ void setup() {
     Serial.println(ssid);
     Serial.print("IP address: ");
     Serial.println(WiFi.localIP());
+
+    attachInterrupt(POT, changeBrightness, CHANGE);
 }
 
 
@@ -351,6 +362,7 @@ void loop() {
         //strip.show();
         //skySim(strip.Color(0, 0, 255), strip.Color(127, 127, 0));
         delay(500);
+        changeBrightness();
     }
 }
 
@@ -363,21 +375,27 @@ void colorWipe(uint32_t c, uint8_t wait) {
     }
 }
 
-void skyTransition() {
+void changeBrightness() {
+    strip.setBrightness((analogRead(POT)>>4));
+    //Serial.println("brightness interrupt");
+    //Serial.println((analogRead(POT)>>4));
+}
+
+void skyTransition(int wait) {
     for (int i = 0; i < 255; i++) {
         skySim(strip.Color(0, i, 255), strip.Color(127, i, 255));
-        delay(20);
+        delay(wait);
     }
 }
 void skySim(uint32_t outer, uint32_t inner) {
     uint8_t x = strip.numPixels() / 3;
-    //Serial.println(strip.getBrightness());
+    Serial.println(strip.getBrightness());
     for (uint8_t i=0; i<strip.numPixels(); i++) {
         if ((i > x) && (i < (strip.numPixels() - x - 1)))
             strip.setPixelColor(i, inner);
         else
             strip.setPixelColor(i, outer);
     }
-    strip.setBrightness((analogRead(POT)>>4));
+    changeBrightness();
     strip.show();
 }
