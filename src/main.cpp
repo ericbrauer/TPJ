@@ -4,19 +4,18 @@
 #include <ArduinoJson.h>
 #include <Adafruit_NeoPixel.h>
 #include <TimeLib.h>
-#include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
 #include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager WiFi Configuration Magic
 
-#include <led.h>
-#include <request.h>
+#include <LightStrip.h>
+#include <WebHandler.h>
 
 #define TRANSITIONTIME 1800 //30 minutes x 60 seconds.
 #define NUMSTEPS 255 //how many steps in led transition
 
 
 
-ESP8266WebServer server(80);
+
 MDNSResponder mdns;
 
 const char *ssid     = "Goodsprings";
@@ -38,8 +37,9 @@ String webPage = "";
 time_t next_dawn;
 time_t next_dusk;
 
-
-
+ESP8266WebServer server(80);
+LightStrip strip;
+WebHandler handler(server);
 WiFiUDP ntpUDP;
 WiFiClient client;
 
@@ -60,6 +60,14 @@ void setup() {
     WiFiManager wifiManager;
     wifiManager.autoConnect("DIGITAL SKYLIGHT");
 
+    server.on("/", handler.handleRoot);
+
+    server.on("/submit", handler.handleSubmit);
+    server.on("/demo", handler.handleDemo);
+    server.onNotFound(handler.handleNotFound);
+
+    server.begin();
+
 
     //WiFi.begin(ssid, password);
     //while ( WiFi.status() != WL_CONNECTED ) {
@@ -68,20 +76,13 @@ void setup() {
     //}
 
     timeClient.begin();
-    ledInit();
 
-    server.on("/", handleRoot);
-
-    server.on("/submit", handleSubmit);
-    server.on("/demo", handleDemo);
+    strip.ledInit();
 
     if (mdns.begin("skylight", WiFi.localIP())) {
     Serial.println("MDNS responder started");
     }
 
-    server.onNotFound(handleNotFound);
-
-    server.begin();
     Serial.println("HTTP server started");
 
     Serial.println("");
@@ -90,7 +91,7 @@ void setup() {
     Serial.print("IP address: ");
     Serial.println(WiFi.localIP());
 
-    attachInterrupt(POT, changeBrightness, CHANGE);
+    //attachInterrupt(POT, changeBrightness, CHANGE);
 }
 
 
@@ -208,15 +209,15 @@ void loop() {
     for(;;) {
         // Wait a bit before scanning again
         server.handleClient();
-        skyTransition1(20);
-        skyTransition2(20);
-        skyTransition3(20);
+        strip.skyTransition1(20);
+        strip.skyTransition2(20);
+        strip.skyTransition3(20);
         Serial.println(now());
         //strip.setBrightness((analogRead(POT)>>4));
         //strip.show();
         //skySim(strip.Color(0, 0, 255), strip.Color(127, 127, 0));
         delay(500);
-        changeBrightness();
+        strip.changeBrightness();
     }
 }
 
