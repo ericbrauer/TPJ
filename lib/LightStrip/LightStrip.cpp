@@ -10,10 +10,6 @@
 //   NEO_KHZ800  800 KHz bitstream (most NeoPixel products w/WS2812 LEDs)
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(8, PIN, NEO_GRB + NEO_KHZ800);
 
-LightStrip::LightStrip(void) {
-
-}
-
 void changeBrightness() {
     strip.setBrightness((analogRead(POT)>>4));
     strip.show();

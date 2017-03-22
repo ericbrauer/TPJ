@@ -15,7 +15,7 @@
 
 
 
-
+ESP8266WebServer server(80);
 MDNSResponder mdns;
 
 const char *ssid     = "Goodsprings";
@@ -37,9 +37,6 @@ String webPage = "";
 time_t next_dawn;
 time_t next_dusk;
 
-
-LightStrip strip;
-//WebHandler handler;
 WiFiUDP ntpUDP;
 WiFiClient client;
 
@@ -59,13 +56,13 @@ void setup() {
     // THIS WORKS, but some questions about reconnecting...
     WiFiManager wifiManager;
     wifiManager.autoConnect("DIGITAL SKYLIGHT");
-    ESP8266WebServer server(80);
-    WebHandler handler(server);
-    server.on("/", handler.handleRoot);
 
-    server.on("/submit", handler.handleSubmit);
-    server.on("/demo", handler.handleDemo);
-    server.onNotFound(handler.handleNotFound);
+
+    server.on("/", handleRoot);
+
+    server.on("/submit", handleSubmit);
+    server.on("/demo", handleDemo);
+    server.onNotFound(handleNotFound);
 
     server.begin();
 
@@ -78,7 +75,7 @@ void setup() {
 
     timeClient.begin();
 
-    strip.ledInit();
+    ledInit();
 
     if (mdns.begin("skylight", WiFi.localIP())) {
     Serial.println("MDNS responder started");
@@ -210,15 +207,15 @@ void loop() {
     for(;;) {
         // Wait a bit before scanning again
         server.handleClient();
-        strip.skyTransition1(20);
-        strip.skyTransition2(20);
-        strip.skyTransition3(20);
+        skyTransition1(20);
+        skyTransition2(20);
+        skyTransition3(20);
         Serial.println(now());
         //strip.setBrightness((analogRead(POT)>>4));
         //strip.show();
         //skySim(strip.Color(0, 0, 255), strip.Color(127, 127, 0));
         delay(500);
-        strip.changeBrightness();
+        changeBrightness();
     }
 }
 
