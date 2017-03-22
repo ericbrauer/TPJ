@@ -10,7 +10,7 @@ WebHandler::WebHandler(ESP8266WebServer server)
     _server = server;
 }
 
-void handleRoot() {
+void WebHandler::handleRoot() {
     String webPage = "";
     webPage += "<h1>Skylight</h1>";
     webPage += "<p>Connected To</p>";

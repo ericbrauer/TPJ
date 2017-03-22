@@ -37,9 +37,9 @@ String webPage = "";
 time_t next_dawn;
 time_t next_dusk;
 
-ESP8266WebServer server(80);
+
 LightStrip strip;
-WebHandler handler(server);
+//WebHandler handler;
 WiFiUDP ntpUDP;
 WiFiClient client;
 
@@ -59,7 +59,8 @@ void setup() {
     // THIS WORKS, but some questions about reconnecting...
     WiFiManager wifiManager;
     wifiManager.autoConnect("DIGITAL SKYLIGHT");
-
+    ESP8266WebServer server(80);
+    WebHandler handler(server);
     server.on("/", handler.handleRoot);
 
     server.on("/submit", handler.handleSubmit);
