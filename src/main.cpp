@@ -15,7 +15,7 @@
 
 
 
-ESP8266WebServer server(80);
+ESP8266WebServer server;
 MDNSResponder mdns;
 
 const char *ssid     = "Goodsprings";
@@ -56,7 +56,7 @@ void setup() {
     // THIS WORKS, but some questions about reconnecting...
     WiFiManager wifiManager;
     wifiManager.autoConnect("DIGITAL SKYLIGHT");
-
+    ESP8266WebServer server(80);
 
     server.on("/", handleRoot);
 
