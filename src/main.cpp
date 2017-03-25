@@ -10,6 +10,8 @@
 
 #define PIN 14
 #define POT 0
+enum {yellow, red, green};
+enum {NOTIME, OLDTIMES, DAWNORDUSK, WAITFORDUSK, WAITFORDAWN};
 
 // Parameter 1 = number of pixels in strip
 // Parameter 2 = Arduino pin number (most are valid)
@@ -20,8 +22,10 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(8, PIN, NEO_GRB + NEO_KHZ800);
 ESP8266WebServer server(80);
 MDNSResponder mdns;
 
-const char *ssid     = "Goodsprings";
-const char *password = "387iswhereweare";
+unsigned char statusColor;
+unsigned char STATE;
+//const char *ssid     = "Goodsprings";
+//const char *password = "387iswhereweare";
 
 const int timezone_offset = -14400; //dst
 //const int timezone_offset = -18000;
@@ -36,13 +40,16 @@ String webPage = "";
 //const char* my_lat = "43.7001";
 //const char* my_long = "-79.4163";
 
-time_t time_next_event;
+time_t dawn_time;
+time_t dusk_time;
 
 void colorWipe(uint32_t c, uint8_t wait);
 void skySim(uint32_t outer, uint32_t inner);
-void skyTransition1(int wait);
-void skyTransition2(int wait);
-void skyTransition3(int wait);
+void skyTransition(int wait);
+void skyState1(unsigned char i);
+void skyState2(unsigned char i);
+void skyState3(unsigned char i);
+void statusLight(unsigned char statusColor);
 void handleUserInputError();
 void handleSubmit();
 void handleDemo();
@@ -176,7 +183,7 @@ void handleDemo() {
     message += "<p>Press OK to return to previous page.</p>&nbsp;";
     message += "<a href='/'><button>OK</button></a>";
     server.send(200, "text/html", message);
-    skyTransition1(20);
+    skyTransition(10);
 }
 
 void handleNotFound(){
@@ -196,79 +203,39 @@ void handleNotFound(){
 
 void setup() {
     Serial.begin(9600);
-    // Set WiFi to station mode and disconnect from an AP if it was previously connected
-    //WiFi.mode(WIFI_STA);
-    //WiFi.disconnect();
-    //delay(2000);
-    //Serial.println("Setup done");
 
-    // THIS WORKS, but some questions about reconnecting...
     WiFiManager wifiManager;
     wifiManager.autoConnect("DIGITAL SKYLIGHT");
-
-
-    //WiFi.begin(ssid, password);
-    //while ( WiFi.status() != WL_CONNECTED ) {
-    //    delay ( 500 );
-    //    Serial.print ( "." );
-    //}
+    if (wifiManager.autoConnect())
+        statusLight(green);
+    else
+        statusLight(yellow);
 
     timeClient.begin();
 
     strip.begin();
     strip.show(); // Initialize all pixels to 'off'
 
-    server.on("/", handleRoot);
-
-    server.on("/submit", handleSubmit);
-    server.on("/demo", handleDemo);
-
     if (mdns.begin("skylight", WiFi.localIP())) {
     Serial.println("MDNS responder started");
     }
 
+    server.on("/", handleRoot);
+    server.on("/submit", handleSubmit);
+    server.on("/demo", handleDemo);
     server.onNotFound(handleNotFound);
-
     server.begin();
     Serial.println("HTTP server started");
 
     Serial.println("");
     Serial.print("Connected to ");
-    Serial.println(ssid);
+    //Serial.println(ssid);
     Serial.print("IP address: ");
     Serial.println(WiFi.localIP());
 
     attachInterrupt(POT, changeBrightness, CHANGE);
+    STATE = NOTIME;
 }
-
-
-void printScannedNetworks() {
-    Serial.println("scan start");
-    int n = WiFi.scanNetworks();// WiFi.scanNetworks will return the number of networks found
-    Serial.println("scan done");
-    if (n == 0)
-        Serial.println("no networks found");
-    else
-    {
-        Serial.print(n);
-        Serial.println(" networks found");
-        for (int i = 0; i < n; ++i)
-        {
-            // Print SSID and RSSI for each network found
-            Serial.print(i + 1);
-            Serial.print(": ");
-            Serial.print(WiFi.SSID(i));
-            Serial.print(" (");
-            Serial.print(WiFi.RSSI(i));
-            Serial.print(")");
-            Serial.println((WiFi.encryptionType(i) == ENC_TYPE_NONE)?" ":"*");
-            delay(10);
-        }
-    }
-    Serial.println("");
-}
-
-
 
 void checkNTPServer() {
     timeClient.update();
@@ -303,6 +270,7 @@ void getTODRequest() {
     while (client.available() == 0) {
         if (millis() - timeout > 5000) {
             Serial.println(">>> Client Timeout !");
+            statusLight(red);
             client.stop();
             return;
         }
@@ -330,26 +298,56 @@ void getTODRequest() {
     }
 
     setTime(root["dt"]);
-    const char* ddawn_time = root["sys"]["sunrise"];
-    String ddusk_time = root["sys"]["sunset"];
+    dawn_time = root["sys"]["sunrise"];
+    dusk_time = root["sys"]["sunset"];
     Serial.println("dawn time: ");
-    Serial.println(ddawn_time);
+    Serial.println(dawn_time);
     Serial.println("dusk time: ");
-    Serial.println(ddusk_time);
+    Serial.println(dusk_time);
 
     Serial.println("closing connection");
 }
 
 void loop() {
-    //printScannedNetworks();
-    String dawn_time;
-    String dusk_time;
-
-  // Some example procedures showing how to display to the pixels:
-    //colorWipe(strip.Color(0, 0, 2), 5); // Red
-    //delay(2000);
-
-
+    server.handleClient();
+    changeBrightness();
+    switch (STATE) {
+        case NOTIME:
+            getTODRequest();
+            if (!timeNotSet)
+                STATE = DAWNORDUSK;
+        break;
+        case OLDTIMES:
+            getTODRequest();
+            if ((now() > dawn_time) && (now() > dusk_time))
+                STATE = OLDTIMES;
+            else
+                STATE = DAWNORDUSK;
+        break;
+        case DAWNORDUSK:
+            if (now() > dawn_time && (now() < dusk_time)) {
+                Serial.println("It is daytime. Waiting for dusk.");
+                STATE = WAITFORDUSK;
+            }
+            else if (now() < dawn_time && (now() > dusk_time)) {
+                Serial.println("It is nighttime. Waiting for dawn.");
+                STATE = WAITFORDAWN;
+            }
+            else
+                STATE = OLDTIMES;
+        break;
+        case WAITFORDUSK:
+            Serial.print("Time until dusk: ");
+            Serial.print(dusk_time - now());
+            Serial.print("\n");
+        break;
+        case WAITFORDAWN:
+            Serial.print("Time until dawn: ");
+            Serial.print(dawn_time - now());
+            Serial.print("\n");
+        break;
+    }
+/*
     getTODRequest();
     //checkNTPServer();
 
@@ -357,7 +355,7 @@ void loop() {
 
     for(;;) {
         // Wait a bit before scanning again
-        server.handleClient();
+
         skyTransition1(20);
         skyTransition2(20);
         skyTransition3(20);
@@ -365,8 +363,31 @@ void loop() {
         //strip.setBrightness((analogRead(POT)>>4));
         //strip.show();
         //skySim(strip.Color(0, 0, 255), strip.Color(127, 127, 0));
-        delay(500);
+        //delay(500);
         changeBrightness();
+    } */
+}
+
+void statusLight(unsigned char statusColor) {
+    uint32_t x;
+    switch (statusColor) {
+        case yellow:
+            x = strip.Color(255, 255, 0);
+            break;
+        case red:
+            x = strip.Color(255, 255, 0);
+            break;
+        case green:
+            x = strip.Color(0, 255, 0);
+            break;
+    }
+    for (int i = 0; i < 2; i++) {
+        strip.setPixelColor(0, x);
+        strip.show();
+        delay(250);
+        strip.setPixelColor(0, strip.Color(0,0,0));
+        strip.show();
+        delay(250);
     }
 }
 
@@ -380,36 +401,44 @@ void colorWipe(uint32_t c, uint8_t wait) {
 }
 
 void changeBrightness() {
-    strip.setBrightness((analogRead(POT)>>4));
-    strip.show();
-    //Serial.println("brightness interrupt");
-    //Serial.println((analogRead(POT)>>4));
+    static char previous_state;
+    if ((analogRead(POT)>>4) != previous_state) {
+        strip.setBrightness((analogRead(POT)>>4));
+        strip.show();
+        previous_state = (analogRead(POT)>>4);
+    }
 }
 
-void skyTransition1(int wait) {
-    for (int i = 0; i < 255; i++) {
-        skySim(strip.Color(0, 0, (i/2)), strip.Color((i/2), 0, i));
+void skyTransition(int wait) {
+    for (int i =0; i < 255; i++) {
+        skyState1(i);
+        delay(wait);
+    }
+    for (int i=0; i < 255; i++) {
+        skyState2(i);
+        delay(wait);
+    }
+    for (int i=0; i < 255; i++) {
+        skyState3(i);
         delay(wait);
     }
 }
 
-void skyTransition2(int wait) {
-    for (int i = 0; i < 255; i++) {
-        skySim(strip.Color((i/2), 0, (127+(i/2))), strip.Color((127+(i/2)), i, (255-i)));
-        delay(wait);
-    }
+void skyState1(unsigned char i) {
+    skySim(strip.Color(0, 0, (i/2)), strip.Color((i/2), 0, i));
 }
 
-void skyTransition3(int wait) {
-    for (int i = 0; i < 255; i++) {
-        skySim(strip.Color((127-(i/2)), i, 255), strip.Color(255, 255, i));
-        delay(wait);
-    }
+void skyState2(unsigned char i) {
+    skySim(strip.Color((i/2), 0, (127+(i/2))), strip.Color((127+(i/2)), i, (255-i)));
+}
+
+void skyState3(unsigned char i) {
+    skySim(strip.Color((127-(i/2)), i, 255), strip.Color(255, 255, i));
 }
 
 void skySim(uint32_t outer, uint32_t inner) {
     uint8_t x = strip.numPixels() / 3;
-    Serial.println(strip.getBrightness());
+    //Serial.println(strip.getBrightness());
     for (uint8_t i=0; i<strip.numPixels(); i++) {
         if ((i > x) && (i < (strip.numPixels() - x - 1)))
             strip.setPixelColor(i, inner);
