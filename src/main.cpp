@@ -10,8 +10,10 @@
 
 #define PIN 14
 #define POT 0
+#define TRANSITIONTIME 3600 //1 hour to get from night to day.
+#define HALFTRANSITIION TRANSITIONTIME/2
 enum {yellow, red, green};
-enum {NOTIME, OLDTIMES, DAWNORDUSK, WAITFORDUSK, WAITFORDAWN};
+enum {NOTIME, OLDTIMES, DAWNORDUSK, WAITFORDUSK, WAITFORDAWN, DUSK, DAWN};
 
 // Parameter 1 = number of pixels in strip
 // Parameter 2 = Arduino pin number (most are valid)
@@ -57,6 +59,7 @@ void handleAck();
 void parseSunrise(int hour, int minute);
 void parseSunset(int hour, int minute);
 void changeBrightness();
+short int calculateStateOut(int x);
 
 WiFiUDP ntpUDP;
 WiFiClient client;
@@ -311,25 +314,43 @@ void getTODRequest() {
 void loop() {
     server.handleClient();
     changeBrightness();
+
     switch (STATE) {
         case NOTIME:
+            Serial.println(STATE);
             getTODRequest();
+
             if (!timeNotSet)
                 STATE = DAWNORDUSK;
         break;
         case OLDTIMES:
+            Serial.println(STATE);
             getTODRequest();
             if ((now() > dawn_time) && (now() > dusk_time))
                 STATE = OLDTIMES;
             else
                 STATE = DAWNORDUSK;
+                //dusk_time = now()+10;
         break;
         case DAWNORDUSK:
-            if (now() > dawn_time && (now() < dusk_time)) {
+            Serial.println(STATE);
+            dusk_time = 1490478890;
+            Serial.print("dusk time: ");
+            Serial.print(dusk_time);
+            Serial.print("\n");
+            Serial.print("now: ");
+            Serial.print(now());
+            Serial.print("\n");
+            Serial.print("dawn time: ");
+            Serial.print(dawn_time);
+            Serial.print("\n");
+            Serial.println(now() >= dawn_time);
+            Serial.println(now() < dusk_time);
+            if ((now() >= dawn_time) && (now() < dusk_time)) {
                 Serial.println("It is daytime. Waiting for dusk.");
                 STATE = WAITFORDUSK;
             }
-            else if (now() < dawn_time && (now() > dusk_time)) {
+            else if (now() < dawn_time) {
                 Serial.println("It is nighttime. Waiting for dawn.");
                 STATE = WAITFORDAWN;
             }
@@ -337,16 +358,64 @@ void loop() {
                 STATE = OLDTIMES;
         break;
         case WAITFORDUSK:
+            Serial.println(STATE);
             Serial.print("Time until dusk: ");
             Serial.print(dusk_time - now());
             Serial.print("\n");
+            if ((dusk_time - now()) <= (2400))
+                STATE = DUSK;
+            else {
+                skyState3(255);
+                delay(1000);
+            }
         break;
         case WAITFORDAWN:
+            Serial.println(STATE);
             Serial.print("Time until dawn: ");
             Serial.print(dawn_time - now());
             Serial.print("\n");
+            if ((dawn_time - now()) <= (2400))
+                STATE = DAWN;
+            else {
+                skyState1(0);
+                delay(1000);
+            }
         break;
+        case DUSK:
+
+            Serial.println(dusk_time - now());
+            if ((dusk_time + (TRANSITIONTIME / 3)) < now())
+                STATE = DAWNORDUSK;
+            else {
+                short int yy = (calculateStateOut(dusk_time - now()));
+                Serial.println(yy);
+                short int y = 765 - yy;
+                Serial.println(y);
+                if (y <= 255)
+                    skyState1(y);
+                else if (y > 510)
+                    skyState3(y-510);
+                else
+                    skyState2(y-255);
+            }
+        break;
+        case DAWN:
+            if ((dawn_time + (TRANSITIONTIME / 3)) < now())
+                STATE = DAWNORDUSK;
+            else {
+                short int y = calculateStateOut(dawn_time - now());
+                if (y <= 255)
+                    skyState1(y);
+                else if (y > 510)
+                    skyState3(y-510);
+                else
+                    skyState2(y-255);
+            }
+        break;
+
     }
+
+}
 /*
     getTODRequest();
     //checkNTPServer();
@@ -366,6 +435,9 @@ void loop() {
         //delay(500);
         changeBrightness();
     } */
+
+short int calculateStateOut(int x) {
+    return ((x - 2400) / (-TRANSITIONTIME / 765));
 }
 
 void statusLight(unsigned char statusColor) {
