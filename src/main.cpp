@@ -141,8 +141,10 @@ void handleSubmit() {
             }
         }
     }
-    if (sunset_flag)
+    if (sunset_flag) {
+        //Serial.println("we're getting here");
         parseSunset(hour, minute);
+    }
     else
         parseSunrise(hour, minute);
     handleAck();
@@ -151,16 +153,27 @@ void handleSubmit() {
 void parseSunrise(int hour, int minute) {
     TimeElements tm;
     breakTime(now(), tm);
+    Serial.println(tm.Year);
+    Serial.println(tm.Month);
+    Serial.println(tm.Day);
     Serial.println(tm.Hour);
-    Serial.println(hour);
+    Serial.println(tm.Minute);
+    Serial.println(tm.Second);
+    //Serial.println(hour);
 
 }
 
 void parseSunset(int hour, int minute) {
     TimeElements tm;
     breakTime(now(), tm);
+    Serial.println(tm.Year);
+    Serial.println(tm.Month);
+    Serial.println(tm.Day);
     Serial.println(tm.Hour);
-    Serial.println(hour);
+    Serial.println(tm.Minute);
+    Serial.println(tm.Second);
+    Serial.println(tm.Hour);
+    //Serial.println(hour);
 }
 
 void handleAck() {
@@ -300,9 +313,12 @@ void getTODRequest() {
       return;
     }
 
-    setTime(root["dt"]);
-    dawn_time = root["sys"]["sunrise"];
-    dusk_time = root["sys"]["sunset"];
+    //setTime(root["dt"]);
+
+    if (((root["sys"]["sunrise"]) + timezone_offset) <= (now() + 43200)) //only save if in the next 12 hours
+        dawn_time = (root["sys"]["sunrise"]) + timezone_offset;
+    if (((root["sys"]["sunset"]) + timezone_offset) <= (now() + 43200))
+        dusk_time = (root["sys"]["sunset"]) + timezone_offset;;
     Serial.println("dawn time: ");
     Serial.println(dawn_time);
     Serial.println("dusk time: ");
@@ -318,7 +334,8 @@ void loop() {
     switch (STATE) {
         case NOTIME:
             Serial.println(STATE);
-            getTODRequest();
+            checkNTPServer();
+            //getTODRequest();
 
             if (!timeNotSet)
                 STATE = DAWNORDUSK;
@@ -334,7 +351,7 @@ void loop() {
         break;
         case DAWNORDUSK:
             Serial.println(STATE);
-            dusk_time = 1490478890;
+            //dusk_time = 1490478890;
             Serial.print("dusk time: ");
             Serial.print(dusk_time);
             Serial.print("\n");
