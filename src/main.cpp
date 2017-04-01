@@ -60,6 +60,7 @@ void parseSunrise(int hour, int minute);
 void parseSunset(int hour, int minute);
 void changeBrightness();
 short int calculateStateOut(int x);
+void getTODRequest();
 
 WiFiUDP ntpUDP;
 WiFiClient client;
@@ -85,6 +86,7 @@ void handleRoot() {
     webPage += "Minute:  <input type='text' name='set_min' maxlength='2' style='width:50px;'>";
     webPage += "PM  <input type='submit' value='Save'></form>";
     webPage += "<p><a href='demo'><button style='width:100%;'>Run a Demo</button></a>&nbsp;</p>";
+    webPage += "<p><a href='reset'><button style='width:100%;'>Reset Manual Alarms</button></a>&nbsp;</p>";
     server.send(200, "text/html", webPage);
 }
 
@@ -151,29 +153,31 @@ void handleSubmit() {
 }
 
 void parseSunrise(int hour, int minute) {
+    time_t time_temp;
     TimeElements tm;
     breakTime(now(), tm);
-    Serial.println(tm.Year);
-    Serial.println(tm.Month);
-    Serial.println(tm.Day);
-    Serial.println(tm.Hour);
-    Serial.println(tm.Minute);
-    Serial.println(tm.Second);
-    //Serial.println(hour);
-
+    tm.Day += 1;
+    tm.Hour = hour;
+    tm.Minute = minute;
+    tm.Second = 0;
+    time_temp = makeTime(tm);
+    Serial.print("dawn time set to: ");
+    Serial.println(time_temp);
+    dawn_time = time_temp;
 }
 
 void parseSunset(int hour, int minute) {
     TimeElements tm;
+    time_t time_temp;
     breakTime(now(), tm);
-    Serial.println(tm.Year);
-    Serial.println(tm.Month);
-    Serial.println(tm.Day);
-    Serial.println(tm.Hour);
-    Serial.println(tm.Minute);
-    Serial.println(tm.Second);
-    Serial.println(tm.Hour);
-    //Serial.println(hour);
+    tm.Hour = hour+12;
+    tm.Minute = minute;
+    tm.Second = 0;
+    time_temp = makeTime(tm);
+    Serial.print("dusk time set to: ");
+    Serial.println(time_temp);
+    dusk_time = time_temp;
+
 }
 
 void handleAck() {
@@ -184,6 +188,15 @@ void handleAck() {
     server.send(200, "text/html", message);
 }
 
+
+void handleRst() {
+    String message = "";
+    getTODRequest();
+    message += "<p><b>Alarms have been forgotten. Using actual dawn/dusk.</b></p>";
+    message += "<p>Press OK to return to previous page.</p>&nbsp;";
+    message += "<a href='/'><button>OK</button></a>";
+    server.send(200, "text/html", message);
+}
 
 void handleUserInputError() {
     String message = "";
@@ -239,6 +252,7 @@ void setup() {
     server.on("/", handleRoot);
     server.on("/submit", handleSubmit);
     server.on("/demo", handleDemo);
+    server.on("/reset", handleRst);
     server.onNotFound(handleNotFound);
     server.begin();
     Serial.println("HTTP server started");
@@ -318,10 +332,10 @@ void getTODRequest() {
 
     time_temp = root["sys"]["sunrise"];
     if ((time_temp + timezone_offset) <= (now() + 43200)) //only save if in the next 12 hours
-        dawn_time = (time_temp + timezone_offset;
+        dawn_time = time_temp + timezone_offset;
     time_temp = root["sys"]["sunset"];
     if ((time_temp + timezone_offset) <= (now() + 43200))
-        dusk_time = time_temp + timezone_offset;;
+        dusk_time = time_temp + timezone_offset;
     Serial.println("dawn time: ");
     Serial.println(dawn_time);
     Serial.println("dusk time: ");
@@ -333,7 +347,7 @@ void getTODRequest() {
 void loop() {
     server.handleClient();
     changeBrightness();
-
+    Serial.println(timeClient.getFormattedTime());
     switch (STATE) {
         case NOTIME:
             Serial.println(STATE);
