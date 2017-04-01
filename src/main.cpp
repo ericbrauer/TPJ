@@ -260,6 +260,7 @@ void checkNTPServer() {
 }
 
 void getTODRequest() {
+    time_t time_temp;
     String line;
     const int httpPort = 80;
 
@@ -315,10 +316,12 @@ void getTODRequest() {
 
     //setTime(root["dt"]);
 
-    if (((root["sys"]["sunrise"]) + timezone_offset) <= (now() + 43200)) //only save if in the next 12 hours
-        dawn_time = (root["sys"]["sunrise"]) + timezone_offset;
-    if (((root["sys"]["sunset"]) + timezone_offset) <= (now() + 43200))
-        dusk_time = (root["sys"]["sunset"]) + timezone_offset;;
+    time_temp = root["sys"]["sunrise"];
+    if ((time_temp + timezone_offset) <= (now() + 43200)) //only save if in the next 12 hours
+        dawn_time = (time_temp + timezone_offset;
+    time_temp = root["sys"]["sunset"];
+    if ((time_temp + timezone_offset) <= (now() + 43200))
+        dusk_time = time_temp + timezone_offset;;
     Serial.println("dawn time: ");
     Serial.println(dawn_time);
     Serial.println("dusk time: ");
