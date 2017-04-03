@@ -98,10 +98,6 @@ void handleSubmit() {
             Serial.println(server.argName(i));
             Serial.println(server.arg(i));
             x = server.arg(i).toInt();
-            //if (!isNumber(x)) {
-            //    handleUserInputError();
-            //    return;
-            //}
             if (server.argName(i) == "rise_hour") {
                 if ((x > 12) || (x < 1)) {
                     handleUserInputError();
@@ -142,7 +138,6 @@ void handleSubmit() {
         }
     }
     if (sunset_flag) {
-        //Serial.println("we're getting here");
         parseSunset(hour, minute);
     }
     else
@@ -160,7 +155,6 @@ void parseSunrise(int hour, int minute) {
     tm.Minute = minute;
     tm.Second = 0;
     time_temp = makeTime(tm);
-    //time_temp -= timezone_offset;
     Serial.print("dawn time set to: ");
     Serial.println(time_temp);
     dawn_time = time_temp;
@@ -175,7 +169,6 @@ void parseSunset(int hour, int minute) {
     tm.Minute = minute;
     tm.Second = 0;
     time_temp = makeTime(tm);
-    //time_temp -= timezone_offset;
     Serial.print("dusk time set to: ");
     Serial.println(time_temp);
     dusk_time = time_temp;
