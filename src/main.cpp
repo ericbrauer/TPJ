@@ -43,11 +43,12 @@ const char* api_key = "ab33624b9ab307c2d056de2359eaedf5"; //api key
 const char* my_city = "toronto"; // location
 const char* my_country = "ca"; // country code
 
-String webPage = "";
+//String webPage = "";
 
 /* The following are the main global variables that define the times when
 TOD transitions occur. They are set in either getTODRequest() or in parseSunset
 or parseSunrise when a manual alarm is set. they are used in the STATE machine.
+time_t means that these are seconds since Epoch (Jan 1st, 1970), and UTC.
 */
 volatile time_t dawn_time;
 volatile time_t dusk_time;
@@ -89,7 +90,7 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(16, PIN, NEO_GRB + NEO_KHZ800);
 NTPClient timeClient(ntpUDP, "ca.pool.ntp.org", timezone_offset, 60000);
 
 
-void handleRoot() { 
+void handleRoot() { //this creates HTML code for the main webPage.
     String webPage = "";
     webPage += "<h1>Skylight</h1>";
     webPage += "<p>Time is now: ";
@@ -109,46 +110,37 @@ void handleRoot() {
     server.send(200, "text/html", webPage);
 }
 
-void handleSubmit() {
+void handleSubmit() { // when changes are submitted, this parses the user input.
     char sunset_flag = 0;
     int x;
     int hour = 0;
     int minute = 0;
-    if (server.args() > 0 ) {
-        for ( uint8_t i = 0; i < server.args(); i++ ) {
+    if (server.args() > 0 ) { // if user input exists,
+        for ( uint8_t i = 0; i < server.args(); i++ ) { // for each argument,
             Serial.println(server.argName(i));
             Serial.println(server.arg(i));
-            x = server.arg(i).toInt();
-            if (server.argName(i) == "rise_hour") {
-                if ((x > 12) || (x < 1)) {
+            x = server.arg(i).toInt(); // convert to an integer
+            if (server.argName(i) == "rise_hour") { // if it's a sunrise time,
+                if ((x > 12) || (x < 1)) { // check if it's out of bounds
                     handleUserInputError();
                     return;
                 }
                 else {
-                    hour = x;
+                    hour = x; //set hour to the user input.
                 }
             }
-            if (server.argName(i) == "set_hour") {
-                if ((x > 12) || (x < 1)) {
+            if (server.argName(i) == "set_hour") { // if it's a sunset time,
+                if ((x > 12) || (x < 1)) { // check if out of bounds.
                     handleUserInputError();
                     return;
                 }
                 else {
-                    hour = x;
+                    hour = x; //set hour to user input, and raise sunset flag.
                     sunset_flag = 1;
                 }
             }
-            if (server.argName(i) == "rise_min") {
-                if ((x > 59) || (x < 0)) {
-                    handleUserInputError();
-                    return;
-                }
-                else {
-                    minute = x;
-                }
-            }
-            if (server.argName(i) == "set_min") {
-                if ((x > 59) || (x < 0)) {
+            if ((server.argName(i) == "rise_min") || (server.argName(i) == "set_min")) { //if it's minutes,
+                if ((x > 59) || (x < 0)) { //check if out of bounds
                     handleUserInputError();
                     return;
                 }
@@ -158,35 +150,35 @@ void handleSubmit() {
             }
         }
     }
-    if (sunset_flag) {
+    if (sunset_flag) { //if sunset flag raised, handle the input as sunset.
         parseSunset(hour, minute);
     }
     else
-        parseSunrise(hour, minute);
-    handleAck();
+        parseSunrise(hour, minute); //else, sunrise.
+    handleAck(); //send a response to user.
 }
 
-void parseSunrise(int hour, int minute) {
+void parseSunrise(int hour, int minute) { //sets dawn_time from use input.
     time_t time_temp;
     TimeElements tm;
-    breakTime(now(), tm);
-    //comment this out for presentation
-    //tm.Day += 1;
-    tm.Hour = hour;
-    tm.Minute = minute;
-    tm.Second = 0;
-    time_temp = makeTime(tm);
+    breakTime(now(), tm); // get year, month, day for today.
+    // comment this out for presentation
+    // tm.Day += 1;
+    tm.Hour = hour; // manually set hour to user input
+    tm.Minute = minute; // manually set minute to user input
+    tm.Second = 0; // set seconds to zero
+    time_temp = makeTime(tm); // set a new time with same date.
     Serial.print("dawn time set to: ");
     Serial.println(time_temp);
-    dawn_time = time_temp;
-    STATE = DAWNORDUSK;
+    dawn_time = time_temp; // set dawn_time
+    STATE = DAWNORDUSK; // change STATE to handle new info
 }
 
-void parseSunset(int hour, int minute) {
+void parseSunset(int hour, int minute) { //set dusk_time from user input
     TimeElements tm;
     time_t time_temp;
     breakTime(now(), tm);
-    tm.Hour = hour+12;
+    tm.Hour = hour+12; // add 12 to make it a PM time.
     tm.Minute = minute;
     tm.Second = 0;
     time_temp = makeTime(tm);
@@ -197,7 +189,7 @@ void parseSunset(int hour, int minute) {
 
 }
 
-void handleAck() {
+void handleAck() { //sends a acknowledgement message.
     String message = "";
     message += "<p><b>Alarm has been set.</b></p>";
     message += "<p>Press OK to return to previous page.</p>&nbsp;";
@@ -206,9 +198,9 @@ void handleAck() {
 }
 
 
-void handleRst() {
+void handleRst() { //sends a reset message
     String message = "";
-    getTODRequest();
+    getTODRequest(); // this overwrites user dusk and dawn_time with values from web.
     STATE = DAWNORDUSK;
     message += "<p><b>Alarms have been forgotten. Using actual dawn/dusk.</b></p>";
     message += "<p>Press OK to return to previous page.</p>&nbsp;";
@@ -216,7 +208,7 @@ void handleRst() {
     server.send(200, "text/html", message);
 }
 
-void handleUserInputError() {
+void handleUserInputError() { //sends an error message if user input is invalid.
     String message = "";
     message += "<p><b>Error: Please enter a valid time.</b></p>";
     message += "<p>Press OK to return to previous page.</p>&nbsp;";
@@ -224,16 +216,16 @@ void handleUserInputError() {
     server.send(200, "text/html", message);
 }
 
-void handleDemo() {
+void handleDemo() { //runs a demo.
     String message = "";
     message += "<p><b>Running demo...</b></p>";
     message += "<p>Press OK to return to previous page.</p>&nbsp;";
     message += "<a href='/'><button>OK</button></a>";
     server.send(200, "text/html", message);
-    skyTransition(10);
+    skyTransition(10); // runs a neopixel transition with 10 ms between states.
 }
 
-void handleNotFound(){
+void handleNotFound(){ // recommended from libary. Handles a bad page request.
     String message = "File Not Found\n\n";
     message += "URI: ";
     message += server.uri();
