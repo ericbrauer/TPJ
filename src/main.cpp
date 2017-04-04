@@ -1,48 +1,58 @@
-#include <NTPClient.h>
-#include "ESP8266WiFi.h"
-#include <WiFiUdp.h>
-#include <ArduinoJson.h>
-#include <Adafruit_NeoPixel.h>
-#include <TimeLib.h>
-#include <ESP8266WebServer.h>
-#include <ESP8266mDNS.h>
-#include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager WiFi Configuration Magic
+/*
+-------------------------------------------------------------------------
+    TITLE: Project Skylight
+    AUTHOR: Eric Brauer
+    DATE: 2017-04-04 (final version)
 
-#define PIN 14
-#define POT 0
-#define TRANSITIONTIME 3600 //1 hour to get from night to day.
-#define HALFTRANSITIION TRANSITIONTIME/2
-enum {yellow, red, green};
+    DESCRIPTION: Project Skylight connects to a third-party API to collect
+    dawn_time and dusk_time, and then simulates the current time of day using
+    a Neopixel Array. Further detail will be explained in comments.
+-------------------------------------------------------------------------
+*/
+
+/* The following are third-party libraries used by the project. I claim no
+ownership / responsibility for their use. Anything in main.cpp was written by
+me. NOTE: Links to the libraries can be found in the platformio.ini file. */
+#include <NTPClient.h>          // used for setting time via NTP
+#include "ESP8266WiFi.h"        // used for GET requests
+#include <WiFiUdp.h>            // used for connection with NTPClient
+#include <ArduinoJson.h>        // used to parse JSON response from API
+#include <Adafruit_NeoPixel.h>  // used to control NeoPixels
+#include <TimeLib.h>            // used for time-based functions
+#include <ESP8266WebServer.h>   // used to serve web UI
+#include <ESP8266mDNS.h>        // used to provide "skylight.local for web UI"
+#include <WiFiManager.h>        // used for initial set up of WiFi credentials
+
+#define PIN 14 // GPIO data pin used for NeoPixels
+#define POT 0 // ADC pin used for brightness knob
+#define TRANSITIONTIME 3600 //1 hour to get from night to day.  (in seconds)
+enum {yellow, red, green}; // used for statusLight.
+//states used for the STATE machine in loop()
 enum {NOTIME, OLDTIMES, DAWNORDUSK, WAITFORDUSK, WAITFORDAWN, DUSK, DAWN};
-
-// Parameter 1 = number of pixels in strip
-// Parameter 2 = Arduino pin number (most are valid)
-// Parameter 3 = pixel type flags, add together as needed:
-//   NEO_KHZ800  800 KHz bitstream (most NeoPixel products w/WS2812 LEDs)
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(16, PIN, NEO_GRB + NEO_KHZ800);
-
-ESP8266WebServer server(80);
-MDNSResponder mdns;
-
-unsigned char statusColor;
+unsigned char statusColor; //Initializing variables used with enums
 unsigned char STATE;
 
-const int timezone_offset = -14400; //dst
-//const int timezone_offset = -18000;
+/* The following variables are hard-coded, but in a commercial release would
+need to be dynamic or otherwise set up properly. */
 
-const char* tod_host = "api.openweathermap.org";
-const char* api_key = "ab33624b9ab307c2d056de2359eaedf5";
-const char* my_city = "toronto";
-const char* my_country = "ca";
+const int timezone_offset = -14400; // Eastern Daylight Timezone offset from UTC.
+//const int timezone_offset = -18000; //Eastern Standard Timezone offset from UTC.
+
+const char* tod_host = "api.openweathermap.org"; // url
+const char* api_key = "ab33624b9ab307c2d056de2359eaedf5"; //api key
+const char* my_city = "toronto"; // location
+const char* my_country = "ca"; // country code
 
 String webPage = "";
 
-//const char* my_lat = "43.7001";
-//const char* my_long = "-79.4163";
-
+/* The following are the main global variables that define the times when
+TOD transitions occur. They are set in either getTODRequest() or in parseSunset
+or parseSunrise when a manual alarm is set. they are used in the STATE machine.
+*/
 volatile time_t dawn_time;
 volatile time_t dusk_time;
 
+// function delarations follow
 void colorWipe(uint32_t c, uint8_t wait);
 void skySim(uint32_t outer, uint32_t inner);
 void skyTransition(int wait);
@@ -60,15 +70,26 @@ void changeBrightness();
 short int calculateStateOut(int x);
 void getTODRequest();
 
+//Initializing objects
 WiFiUDP ntpUDP;
 WiFiClient client;
+
+ESP8266WebServer server(80); // 80 = port for http
+MDNSResponder mdns;
+
+// Parameter 1 = number of pixels in strip
+// Parameter 2 = Arduino pin number (most are valid)
+// Parameter 3 = pixel type flags, add together as needed:
+//   NEO_KHZ800  800 KHz bitstream (most NeoPixel products w/WS2812 LEDs)
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(16, PIN, NEO_GRB + NEO_KHZ800);
 
 // You can specify the time server pool and the offset (in seconds, can be
 // changed later with setTimeOffset() ). Additionaly you can specify the
 // update interval (in milliseconds, can be changed using setUpdateInterval() ).
 NTPClient timeClient(ntpUDP, "ca.pool.ntp.org", timezone_offset, 60000);
 
-void handleRoot() {
+
+void handleRoot() { 
     String webPage = "";
     webPage += "<h1>Skylight</h1>";
     webPage += "<p>Time is now: ";
