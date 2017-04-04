@@ -26,6 +26,8 @@ me. NOTE: Links to the libraries can be found in the platformio.ini file. */
 #define PIN 14 // GPIO data pin used for NeoPixels
 #define POT 0 // ADC pin used for brightness knob
 #define TRANSITIONTIME 3600 //1 hour to get from night to day.  (in seconds)
+#define THIRDOFTTIME TRANSITIONTIME / 3
+#define TWOTHIRDSOFTIME THIRDOFTTIME * 2
 enum {yellow, red, green}; // used for statusLight.
 //states used for the STATE machine in loop()
 enum {NOTIME, OLDTIMES, DAWNORDUSK, WAITFORDUSK, WAITFORDAWN, DUSK, DAWN};
@@ -48,7 +50,7 @@ const char* my_country = "ca"; // country code
 /* The following are the main global variables that define the times when
 TOD transitions occur. They are set in either getTODRequest() or in parseSunset
 or parseSunrise when a manual alarm is set. they are used in the STATE machine.
-time_t means that these are seconds since Epoch (Jan 1st, 1970), and UTC.
+time_t means that these are seconds since Epoch (Jan 1st, 1970), and in local time.
 */
 volatile time_t dawn_time;
 volatile time_t dusk_time;
@@ -243,6 +245,11 @@ void handleNotFound(){ // recommended from libary. Handles a bad page request.
 void setup() {
     Serial.begin(9600);
 
+    /* wifiManager tries to connect to a remembered wifi access point. If it
+    fails, then will set the ESP-12 to station mode, where it provides its own
+    access point with SSID "DIGITAL SKYLIGHT." The use can then scan available
+    access points and enter credentials. statusLight() blinks one of the
+    neopixels with the colour to indicate status. */
     WiFiManager wifiManager;
     wifiManager.autoConnect("DIGITAL SKYLIGHT");
     if (wifiManager.autoConnect())
@@ -255,10 +262,13 @@ void setup() {
     strip.begin();
     strip.show(); // Initialize all pixels to 'off'
 
+    //starts up micro-DNS server. The Skylight will be reachable at skylight.local.
     if (mdns.begin("skylight", WiFi.localIP())) {
     Serial.println("MDNS responder started");
     }
 
+    /* sets the behaviour of the web server. each of these indicates a suffix after
+    skylight.local. So skylight.local/ is where we find the main UI, and so on. */
     server.on("/", handleRoot);
     server.on("/submit", handleSubmit);
     server.on("/demo", handleDemo);
@@ -267,32 +277,33 @@ void setup() {
     server.begin();
     Serial.println("HTTP server started");
 
-    Serial.println("");
-    Serial.print("Connected to ");
-    //Serial.println(ssid);
+    //IP to use if DNS server fails. Used for debugging.
     Serial.print("IP address: ");
     Serial.println(WiFi.localIP());
 
-    attachInterrupt(POT, changeBrightness, CHANGE);
+    //attachInterrupt(POT, changeBrightness, CHANGE);
+    //set initial state for loop().
     STATE = NOTIME;
 }
 
-void checkNTPServer() {
+void checkNTPServer() { // requests sync with NTP.
     timeClient.update();
-    Serial.println(timeClient.getFormattedTime());
-    setTime(timeClient.getEpochTime());
+    Serial.println(timeClient.getFormattedTime()); //debugging
+    setTime(timeClient.getEpochTime()); //debugging
 }
 
-void getTODRequest() {
+void getTODRequest() { // sends a GET request to get TOD, parses response, sets times
     time_t time_temp;
     String line;
     const int httpPort = 80;
 
+    // stop if connection fails
     if (!client.connect(tod_host, httpPort)) {
         Serial.println("connection failed");
         return;
     }
 
+    // generate the get request
     String url = "/data/2.5/weather?q=";
     url += my_city;
     url += ",";
@@ -311,14 +322,13 @@ void getTODRequest() {
     while (client.available() == 0) {
         if (millis() - timeout > 5000) {
             Serial.println(">>> Client Timeout !");
-            statusLight(red);
+            statusLight(red); // indicate failure with red status light.
             client.stop();
             return;
         }
     }
 
-
-
+    // Read Response, ignore HTTP headers
     Serial.println("request sent");
     while (client.connected()) {
         String line = client.readStringUntil('\n');
@@ -329,8 +339,10 @@ void getTODRequest() {
     }
 
     line = client.readStringUntil('\n');
+    // variable line stores the actual JSON response that we wish to parse.
     Serial.print(line);
 
+    // Initialize object to parse JSON. stop if failure.
     DynamicJsonBuffer jsonBuffer;
     JsonObject &root = jsonBuffer.parseObject(line);
     if (!root.success()) {
@@ -338,11 +350,13 @@ void getTODRequest() {
       return;
     }
 
-    //setTime(root["dt"]);
-
+    /* the times sent from openweathermap are in epoch times at UTC.
+    So, to deal with them, we add the timezone_offset and check that they aren't
+    too far in the future. Otherwise we might overwrite an upcoming event with
+    an event happening tomorrow. */
     time_temp = root["sys"]["sunrise"];
     if ((time_temp + timezone_offset) <= (now() + 43200)) //only save if in the next 12 hours
-        dawn_time = time_temp + timezone_offset;
+        dawn_time = time_temp + timezone_offset; //dawn_time is an epoch in local timezone.
     time_temp = root["sys"]["sunset"];
     if ((time_temp + timezone_offset) <= (now() + 43200))
         dusk_time = time_temp + timezone_offset;
@@ -355,31 +369,26 @@ void getTODRequest() {
 }
 
 void loop() {
-    server.handleClient();
-    changeBrightness();
+    server.handleClient(); // if user requests a webPage, handle the request.
+    changeBrightness(); // if ADC value changes, set a different brightness
     Serial.println(timeClient.getFormattedTime());
+    /* Here is the main state machine. Used to set up transitions between events.*/
     switch (STATE) {
-        case NOTIME:
-            Serial.println(STATE);
+        case NOTIME: //initial state. No time set on power up, sync with NTP.
             checkNTPServer();
-            //getTODRequest();
 
-            if (!timeNotSet)
+            if (!timeNotSet) // if time is set successfully, move to next state.
                 STATE = DAWNORDUSK;
         break;
-        case OLDTIMES:
-            Serial.println(STATE);
+
+        case OLDTIMES: // if times are too old, run a TOD request to update them.
             getTODRequest();
-            if ((now() > dawn_time) && (now() > dusk_time))
-                STATE = OLDTIMES;
-            else
-                STATE = DAWNORDUSK;
-                //dusk_time = now()+10;
+            STATE = DAWNORDUSK;
         break;
-        case DAWNORDUSK:
+
+        case DAWNORDUSK: // try to determine what is the next transition event.
             Serial.println(STATE);
-            //dusk_time = 1490478890;
-            Serial.print("dusk time: ");
+            Serial.print("dusk time: "); //debugging messages.
             Serial.print(dusk_time);
             Serial.print("\n");
             Serial.print("now: ");
@@ -398,43 +407,57 @@ void loop() {
                 Serial.println("It is nighttime. Waiting for dawn.");
                 STATE = WAITFORDAWN;
             }
+            // if dawn_time and dusk_time are both older than now, we need an update.
             if ((now() > dawn_time) && (now() > dusk_time))
                 STATE = OLDTIMES;
         break;
-        case WAITFORDUSK:
+
+        case WAITFORDUSK: // set Neopixels to daylight. Wait.
             Serial.println(STATE);
             Serial.print("Time until dusk: ");
             Serial.print(dusk_time - now());
             Serial.print("\n");
-            if ((dusk_time - now()) <= (2400))
+            // we will begin a transition about 40 minutes before a scheduled event.
+            if ((dusk_time - now()) <= TWOTHIRDSOFTIME)
                 STATE = DUSK;
             else {
                 skyState3(255);
-                delay(1000);
+                delay(100);
             }
         break;
-        case WAITFORDAWN:
+
+        case WAITFORDAWN: // set Neopixels to off. Wait.
             Serial.println(STATE);
             Serial.print("Time until dawn: ");
             Serial.print(dawn_time - now());
             Serial.print("\n");
-            if ((dawn_time - now()) <= (2400))
+            // we will begin a transition about 40 minutes before a scheduled event.
+            if ((dawn_time - now()) <= TWOTHIRDSOFTIME)
                 STATE = DAWN;
             else {
                 skyState1(0);
                 delay(1000);
             }
         break;
-        case DUSK:
 
+        case DUSK: //run the transition
             Serial.println(dusk_time - now());
-            if ((dusk_time + (TRANSITIONTIME / 3)) < now())
+            // if we're twenty minutes past dusk, the event is over. go back to waiting.
+            if ((dusk_time + THIRDOFTTIME) < now())
                 STATE = DAWNORDUSK;
+            /* if not, the show is still on. we need to translate a time duration
+            into 3 sets chars. Each transition has 255 possible states.
+            calculateStateOut will translate time into a state. Since this is
+            dusk, everything is happening in reverse, and so we subtract this result
+            from 765 (255 * 3). */
             else {
+                /* we use the time remaining before dusk to calculate the state
+                that we want our neopixels to be in. */
                 short int yy = (calculateStateOut(dusk_time - now()));
                 Serial.println(yy);
                 short int y = 765 - yy;
                 Serial.println(y);
+                // skyStates are the Neopixel functions.
                 if (y <= 255)
                     skyState1(y);
                 else if (y > 510)
@@ -443,8 +466,8 @@ void loop() {
                     skyState2(y-255);
             }
         break;
-        case DAWN:
-            if ((dawn_time + (TRANSITIONTIME / 3)) < now())
+        case DAWN: // dawn occurs in the same way as dusk, but not reversed.
+            if ((dawn_time + THIRDOFTTIME) < now())
                 STATE = DAWNORDUSK;
             else {
                 short int y = calculateStateOut(dawn_time - now());
@@ -461,11 +484,11 @@ void loop() {
 
 }
 
-short int calculateStateOut(int x) {
+short int calculateStateOut(int x) { // returns an integer from a time remaining
     return ((x - 2400) / (-TRANSITIONTIME / 765));
 }
 
-void statusLight(unsigned char statusColor) {
+void statusLight(unsigned char statusColor) { // blinks a status light
     uint32_t x;
     switch (statusColor) {
         case yellow:
@@ -488,16 +511,7 @@ void statusLight(unsigned char statusColor) {
     }
 }
 
-// Fill the dots one after the other with a color
-void colorWipe(uint32_t c, uint8_t wait) {
-    for(uint16_t i=0; i<strip.numPixels(); i++) {
-        strip.setPixelColor(i, c);
-        strip.show();
-        delay(wait);
-    }
-}
-
-void changeBrightness() {
+void changeBrightness() { // changes brightness level if there's a change on ADC
     static char previous_state;
     if ((analogRead(POT)>>4) != previous_state) {
         strip.setBrightness((analogRead(POT)>>4));
@@ -506,7 +520,7 @@ void changeBrightness() {
     }
 }
 
-void skyTransition(int wait) {
+void skyTransition(int wait) { // used for demo. Cycles through all the skyStates.
     for (int i =0; i < 255; i++) {
         skyState1(i);
         delay(wait);
@@ -521,33 +535,42 @@ void skyTransition(int wait) {
     }
 }
 
-void skyState1(unsigned char i) {
+/* The following are functions written to control the neopixels. Some explanation
+is probably necessary: The NeoPixel libary sets Pixel colour using a strip.Color()
+data type. There are three 8-bit numbers here, and they correspond to a level of
+colour between 0 and 255 for Red Green Blue. So Strip.Color(255, 0, 0) sets Red
+to maximum, and other colours off. Strip.Color(255, 255, 255) is a pure white */
+
+//first state. No lights to a pre-dawn state.
+void skyState1(unsigned char i) { // outer lights set to 50% blue, inner lights set to 50% red, 100% blue.
     Serial.print("SkyState 1, state: ");
     Serial.println(i);
     skySim(strip.Color(0, 0, (i/2)), strip.Color((i/2), 0, i));
 }
 
-void skyState2(unsigned char i) {
+//second state. Pre-dawn to dawn.
+void skyState2(unsigned char i) { //outer lights from 50% blue to 50% red and 100% blue.
+    //inner lights from 50% red, 100% blue to Yellow.
     Serial.print("SkyState 2, state: ");
     Serial.println(i);
     skySim(strip.Color((i/2), 0, (127+(i/2))), strip.Color((127+(i/2)), i, (255-i)));
 }
 
-void skyState3(unsigned char i) {
+//third state. Dawn to Day.
+void skyState3(unsigned char i) { //outer from magenta to cyan. Inner from yellow to white.
     Serial.print("SkyState 3, state: ");
     Serial.println(i);
     skySim(strip.Color((127-(i/2)), i, 255), strip.Color(255, 255, i));
 }
 
-void skySim(uint32_t outer, uint32_t inner) {
+void skySim(uint32_t outer, uint32_t inner) { //divides the array into threes, sets the lights.
     uint8_t x = strip.numPixels() / 3;
-    //Serial.println(strip.getBrightness());
     for (uint8_t i=0; i<strip.numPixels(); i++) {
-        if ((i > x) && (i < (strip.numPixels() - x - 1)))
+        if ((i > x) && (i < (strip.numPixels() - x - 1))) //if the pixel address is in the middle, set it to inner colour.
             strip.setPixelColor(i, inner);
         else
-            strip.setPixelColor(i, outer);
+            strip.setPixelColor(i, outer); // else, set it to outer colour.
     }
-    changeBrightness();
-    strip.show();
+    changeBrightness(); //change the brightness based on ADC reading.
+    strip.show(); // Output the new state to the Neopixels.
 }
