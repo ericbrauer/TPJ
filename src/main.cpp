@@ -1,48 +1,58 @@
-#include <NTPClient.h>
-#include "ESP8266WiFi.h"
-#include <WiFiUdp.h>
-#include <ArduinoJson.h>
-#include <Adafruit_NeoPixel.h>
-#include <TimeLib.h>
-#include <ESP8266WebServer.h>
-#include <ESP8266mDNS.h>
-#include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager WiFi Configuration Magic
+/*
+-------------------------------------------------------------------------
+    TITLE: Project Skylight
+    AUTHOR: Eric Brauer
+    DATE: 2017-04-04 (final version)
 
-#define PIN 14
-#define POT 0
-#define TRANSITIONTIME 3600 //1 hour to get from night to day.
-#define HALFTRANSITIION TRANSITIONTIME/2
-enum {yellow, red, green};
+    DESCRIPTION: Project Skylight connects to a third-party API to collect
+    dawn_time and dusk_time, and then simulates the current time of day using
+    a Neopixel Array. Further detail will be explained in comments.
+-------------------------------------------------------------------------
+*/
+
+/* The following are third-party libraries used by the project. I claim no
+ownership / responsibility for their use. Anything in main.cpp was written by
+me. NOTE: Links to the libraries can be found in the platformio.ini file. */
+#include <NTPClient.h>          // used for setting time via NTP
+#include "ESP8266WiFi.h"        // used for GET requests
+#include <WiFiUdp.h>            // used for connection with NTPClient
+#include <ArduinoJson.h>        // used to parse JSON response from API
+#include <Adafruit_NeoPixel.h>  // used to control NeoPixels
+#include <TimeLib.h>            // used for time-based functions
+#include <ESP8266WebServer.h>   // used to serve web UI
+#include <ESP8266mDNS.h>        // used to provide "skylight.local for web UI"
+#include <WiFiManager.h>        // used for initial set up of WiFi credentials
+
+#define PIN 14 // GPIO data pin used for NeoPixels
+#define POT 0 // ADC pin used for brightness knob
+#define TRANSITIONTIME 3600 //1 hour to get from night to day.  (in seconds)
+enum {yellow, red, green}; // used for statusLight.
+//states used for the STATE machine in loop()
 enum {NOTIME, OLDTIMES, DAWNORDUSK, WAITFORDUSK, WAITFORDAWN, DUSK, DAWN};
-
-// Parameter 1 = number of pixels in strip
-// Parameter 2 = Arduino pin number (most are valid)
-// Parameter 3 = pixel type flags, add together as needed:
-//   NEO_KHZ800  800 KHz bitstream (most NeoPixel products w/WS2812 LEDs)
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(16, PIN, NEO_GRB + NEO_KHZ800);
-
-ESP8266WebServer server(80);
-MDNSResponder mdns;
-
-unsigned char statusColor;
+unsigned char statusColor; //Initializing variables used with enums
 unsigned char STATE;
 
-const int timezone_offset = -14400; //dst
-//const int timezone_offset = -18000;
+/* The following variables are hard-coded, but in a commercial release would
+need to be dynamic or otherwise set up properly. */
 
-const char* tod_host = "api.openweathermap.org";
-const char* api_key = "ab33624b9ab307c2d056de2359eaedf5";
-const char* my_city = "toronto";
-const char* my_country = "ca";
+const int timezone_offset = -14400; // Eastern Daylight Timezone offset from UTC.
+//const int timezone_offset = -18000; //Eastern Standard Timezone offset from UTC.
+
+const char* tod_host = "api.openweathermap.org"; // url
+const char* api_key = "ab33624b9ab307c2d056de2359eaedf5"; //api key
+const char* my_city = "toronto"; // location
+const char* my_country = "ca"; // country code
 
 String webPage = "";
 
-//const char* my_lat = "43.7001";
-//const char* my_long = "-79.4163";
+/* The following are the main global variables that define the times when
+TOD transitions occur. They are set in either getTODRequest() or in parseSunset
+or parseSunrise when a manual alarm is set. they are used in the STATE machine.
+*/
+time_t dawn_time;
+time_t dusk_time;
 
-volatile time_t dawn_time;
-volatile time_t dusk_time;
-
+// function declarations follow:
 void colorWipe(uint32_t c, uint8_t wait);
 void skySim(uint32_t outer, uint32_t inner);
 void skyTransition(int wait);
@@ -58,10 +68,19 @@ void parseSunrise(int hour, int minute);
 void parseSunset(int hour, int minute);
 void changeBrightness();
 short int calculateStateOut(int x);
-void getTODRequest();
 
+// object initialized here:
 WiFiUDP ntpUDP;
 WiFiClient client;
+ESP8266WebServer server(80); // 80 = port for http
+MDNSResponder mdns;
+
+// Parameter 1 = number of pixels in strip
+// Parameter 2 = Arduino pin number (most are valid)
+// Parameter 3 = pixel type flags, add together as needed:
+//   NEO_KHZ800  800 KHz bitstream (most NeoPixel products w/WS2812 LEDs)
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(16, PIN, NEO_GRB + NEO_KHZ800);
+
 
 // You can specify the time server pool and the offset (in seconds, can be
 // changed later with setTimeOffset() ). Additionaly you can specify the
@@ -84,7 +103,6 @@ void handleRoot() {
     webPage += "Minute:  <input type='text' name='set_min' maxlength='2' style='width:50px;'>";
     webPage += "PM  <input type='submit' value='Save'></form>";
     webPage += "<p><a href='demo'><button style='width:100%;'>Run a Demo</button></a>&nbsp;</p>";
-    webPage += "<p><a href='reset'><button style='width:100%;'>Reset Manual Alarms</button></a>&nbsp;</p>";
     server.send(200, "text/html", webPage);
 }
 
@@ -98,6 +116,10 @@ void handleSubmit() {
             Serial.println(server.argName(i));
             Serial.println(server.arg(i));
             x = server.arg(i).toInt();
+            //if (!isNumber(x)) {
+            //    handleUserInputError();
+            //    return;
+            //}
             if (server.argName(i) == "rise_hour") {
                 if ((x > 12) || (x < 1)) {
                     handleUserInputError();
@@ -138,6 +160,7 @@ void handleSubmit() {
         }
     }
     if (sunset_flag) {
+        //Serial.println("we're getting here");
         parseSunset(hour, minute);
     }
     else
@@ -146,34 +169,29 @@ void handleSubmit() {
 }
 
 void parseSunrise(int hour, int minute) {
-    time_t time_temp;
     TimeElements tm;
     breakTime(now(), tm);
-    //comment this out for presentation
-    //tm.Day += 1;
-    tm.Hour = hour;
-    tm.Minute = minute;
-    tm.Second = 0;
-    time_temp = makeTime(tm);
-    Serial.print("dawn time set to: ");
-    Serial.println(time_temp);
-    dawn_time = time_temp;
-    STATE = DAWNORDUSK;
+    Serial.println(tm.Year);
+    Serial.println(tm.Month);
+    Serial.println(tm.Day);
+    Serial.println(tm.Hour);
+    Serial.println(tm.Minute);
+    Serial.println(tm.Second);
+    //Serial.println(hour);
+
 }
 
 void parseSunset(int hour, int minute) {
     TimeElements tm;
-    time_t time_temp;
     breakTime(now(), tm);
-    tm.Hour = hour+12;
-    tm.Minute = minute;
-    tm.Second = 0;
-    time_temp = makeTime(tm);
-    Serial.print("dusk time set to: ");
-    Serial.println(time_temp);
-    dusk_time = time_temp;
-    STATE = DAWNORDUSK;
-
+    Serial.println(tm.Year);
+    Serial.println(tm.Month);
+    Serial.println(tm.Day);
+    Serial.println(tm.Hour);
+    Serial.println(tm.Minute);
+    Serial.println(tm.Second);
+    Serial.println(tm.Hour);
+    //Serial.println(hour);
 }
 
 void handleAck() {
@@ -184,16 +202,6 @@ void handleAck() {
     server.send(200, "text/html", message);
 }
 
-
-void handleRst() {
-    String message = "";
-    getTODRequest();
-    STATE = DAWNORDUSK;
-    message += "<p><b>Alarms have been forgotten. Using actual dawn/dusk.</b></p>";
-    message += "<p>Press OK to return to previous page.</p>&nbsp;";
-    message += "<a href='/'><button>OK</button></a>";
-    server.send(200, "text/html", message);
-}
 
 void handleUserInputError() {
     String message = "";
@@ -249,7 +257,6 @@ void setup() {
     server.on("/", handleRoot);
     server.on("/submit", handleSubmit);
     server.on("/demo", handleDemo);
-    server.on("/reset", handleRst);
     server.onNotFound(handleNotFound);
     server.begin();
     Serial.println("HTTP server started");
@@ -329,10 +336,10 @@ void getTODRequest() {
 
     time_temp = root["sys"]["sunrise"];
     if ((time_temp + timezone_offset) <= (now() + 43200)) //only save if in the next 12 hours
-        dawn_time = time_temp + timezone_offset;
+        dawn_time = (time_temp + timezone_offset;
     time_temp = root["sys"]["sunset"];
     if ((time_temp + timezone_offset) <= (now() + 43200))
-        dusk_time = time_temp + timezone_offset;
+        dusk_time = time_temp + timezone_offset;;
     Serial.println("dawn time: ");
     Serial.println(dawn_time);
     Serial.println("dusk time: ");
@@ -344,7 +351,7 @@ void getTODRequest() {
 void loop() {
     server.handleClient();
     changeBrightness();
-    Serial.println(timeClient.getFormattedTime());
+
     switch (STATE) {
         case NOTIME:
             Serial.println(STATE);
@@ -385,7 +392,7 @@ void loop() {
                 Serial.println("It is nighttime. Waiting for dawn.");
                 STATE = WAITFORDAWN;
             }
-            if ((now() > dawn_time) && (now() > dusk_time))
+            else
                 STATE = OLDTIMES;
         break;
         case WAITFORDUSK:
@@ -447,6 +454,25 @@ void loop() {
     }
 
 }
+/*
+    getTODRequest();
+    //checkNTPServer();
+
+
+
+    for(;;) {
+        // Wait a bit before scanning again
+
+        skyTransition1(20);
+        skyTransition2(20);
+        skyTransition3(20);
+        Serial.println(now());
+        //strip.setBrightness((analogRead(POT)>>4));
+        //strip.show();
+        //skySim(strip.Color(0, 0, 255), strip.Color(127, 127, 0));
+        //delay(500);
+        changeBrightness();
+    } */
 
 short int calculateStateOut(int x) {
     return ((x - 2400) / (-TRANSITIONTIME / 765));
@@ -509,20 +535,14 @@ void skyTransition(int wait) {
 }
 
 void skyState1(unsigned char i) {
-    Serial.print("SkyState 1, state: ");
-    Serial.println(i);
     skySim(strip.Color(0, 0, (i/2)), strip.Color((i/2), 0, i));
 }
 
 void skyState2(unsigned char i) {
-    Serial.print("SkyState 2, state: ");
-    Serial.println(i);
     skySim(strip.Color((i/2), 0, (127+(i/2))), strip.Color((127+(i/2)), i, (255-i)));
 }
 
 void skyState3(unsigned char i) {
-    Serial.print("SkyState 3, state: ");
-    Serial.println(i);
     skySim(strip.Color((127-(i/2)), i, 255), strip.Color(255, 255, i));
 }
 
